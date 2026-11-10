@@ -2,7 +2,7 @@ using System.Reflection;
 
 namespace EquipmentBooking.Api.Common.Hosting;
 
-public static class HostingEnvironmentExtensions
+public static class OpenApiGenerationDetector
 {
     private const string OpenApiGeneratorAssembly = "GetDocument.Insider";
 
