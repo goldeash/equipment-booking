@@ -29,6 +29,11 @@ import { useCategories, useFeatures, useLocations } from './useReferenceData'
 
 const PAGE_SIZE = 20
 
+interface ItemListProps {
+  items: EquipmentListItem[]
+  itemLink: (id: number) => string
+}
+
 const sortOptions = [
   { value: 'name', label: 'Name (A to Z)' },
   { value: '-name', label: 'Name (Z to A)' },
@@ -66,6 +71,10 @@ export default function CataloguePage() {
     page,
     pageSize: PAGE_SIZE,
   }
+  const itemLink = (itemId: number) =>
+    hasRange && params.availableFrom && params.availableTo
+      ? `/equipment/${itemId}?from=${params.availableFrom}&to=${params.availableTo}`
+      : `/equipment/${itemId}`
   const result = useQuery({
     queryKey: ['equipment', params],
     queryFn: () => catalogueApi.search(params),
@@ -172,7 +181,11 @@ export default function CataloguePage() {
             <Text size="sm" c="dimmed">
               {data.totalCount} items{hasRange ? ' free on the selected dates' : ''}
             </Text>
-            {isMobile ? <ItemCards items={data.items} /> : <ItemTable items={data.items} />}
+            {isMobile ? (
+              <ItemCards items={data.items} itemLink={itemLink} />
+            ) : (
+              <ItemTable items={data.items} itemLink={itemLink} />
+            )}
             {data.totalPages > 1 && (
               <Group justify="center">
                 <Pagination total={data.totalPages} value={page} onChange={setPage} />
@@ -185,7 +198,7 @@ export default function CataloguePage() {
   )
 }
 
-function ItemTable({ items }: { items: EquipmentListItem[] }) {
+function ItemTable({ items, itemLink }: ItemListProps) {
   return (
     <Table.ScrollContainer minWidth={760}>
       <Table striped highlightOnHover>
@@ -203,7 +216,7 @@ function ItemTable({ items }: { items: EquipmentListItem[] }) {
           {items.map((item) => (
             <Table.Tr key={item.id}>
               <Table.Td>
-                <Anchor component={Link} to={`/equipment/${item.id}`} fw={600}>
+                <Anchor component={Link} to={itemLink(item.id)} fw={600}>
                   {item.name}
                 </Anchor>
                 <Text size="xs" c="dimmed">
@@ -240,11 +253,11 @@ function ItemTable({ items }: { items: EquipmentListItem[] }) {
   )
 }
 
-function ItemCards({ items }: { items: EquipmentListItem[] }) {
+function ItemCards({ items, itemLink }: ItemListProps) {
   return (
     <SimpleGrid cols={1}>
       {items.map((item) => (
-        <Card key={item.id} withBorder component={Link} to={`/equipment/${item.id}`}>
+        <Card key={item.id} withBorder component={Link} to={itemLink(item.id)}>
           <Group justify="space-between" wrap="nowrap">
             <Stack gap={0}>
               <Text fw={600}>{item.name}</Text>

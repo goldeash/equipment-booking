@@ -12,7 +12,7 @@ describe('buildUrl', () => {
   it('skips empty values and repeats array values', () => {
     expect(
       buildUrl('/equipment', { q: 'camera', page: 2, empty: '', none: undefined, ids: [1, 2] }),
-    ).toBe('/api/v1/equipment?q=camera&page=2&ids=1&ids=2')
+    ).toBe('http://localhost/api/v1/equipment?q=camera&page=2&ids=1&ids=2')
   })
 })
 

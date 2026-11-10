@@ -17,6 +17,8 @@ import { bookingSchema, PURPOSE_MAX, type BookingFormValues } from './bookingSch
 interface BookingFormProps {
   equipmentItemId: number
   bookedPeriods: BookedPeriod[]
+  /** Dates chosen in the catalogue filter, used as the initial value. */
+  initialRange?: [string, string]
 }
 
 const isBlocked = (date: string, periods: BookedPeriod[]) =>
@@ -27,7 +29,7 @@ const isBlocked = (date: string, periods: BookedPeriod[]) =>
   )
 
 /** Booking in four actions: item (already chosen), dates, purpose, confirm (NFR-08). */
-export function BookingForm({ equipmentItemId, bookedPeriods }: BookingFormProps) {
+export function BookingForm({ equipmentItemId, bookedPeriods, initialRange }: BookingFormProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [conflicts, setConflicts] = useState<{ startDate: string; endDate: string }[]>([])
@@ -40,7 +42,11 @@ export function BookingForm({ equipmentItemId, bookedPeriods }: BookingFormProps
     formState: { errors },
   } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingSchema),
-    defaultValues: { startDate: '', endDate: '', purpose: '' },
+    defaultValues: {
+      startDate: initialRange?.[0] ?? '',
+      endDate: initialRange?.[1] ?? '',
+      purpose: '',
+    },
   })
 
   const create = useMutation({

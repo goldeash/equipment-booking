@@ -1,7 +1,7 @@
 import { Badge, Card, Grid, Group, List, Skeleton, Stack, Text, Title } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import { useParams } from 'react-router'
+import { useParams, useSearchParams } from 'react-router'
 import { BookingForm } from '@/features/booking/BookingForm'
 import { catalogueApi } from '@/shared/api/endpoints'
 import { conditionLabels, DATE_FORMAT, formatMoney, formatPeriod } from '@/shared/lib/format'
@@ -14,6 +14,11 @@ const CALENDAR_DAYS = 120
 /** Item card with description, condition, booked periods and the booking form (US-04, US-06). */
 export default function EquipmentPage() {
   const id = Number(useParams().id)
+  const [searchParams] = useSearchParams()
+  const chosenFrom = searchParams.get('from')
+  const chosenTo = searchParams.get('to')
+  const initialRange: [string, string] | undefined =
+    chosenFrom && chosenTo ? [chosenFrom, chosenTo] : undefined
   const item = useQuery({ queryKey: ['equipment', id], queryFn: () => catalogueApi.get(id) })
   const from = dayjs().format(DATE_FORMAT)
   const to = dayjs().add(CALENDAR_DAYS, 'day').format(DATE_FORMAT)
@@ -102,7 +107,11 @@ export default function EquipmentPage() {
                 {equipment.status === 'retired' ? (
                   <Text c="dimmed">The item is retired and cannot be booked.</Text>
                 ) : (
-                  <BookingForm equipmentItemId={equipment.id} bookedPeriods={periods.data ?? []} />
+                  <BookingForm
+                    equipmentItemId={equipment.id}
+                    bookedPeriods={periods.data ?? []}
+                    initialRange={initialRange}
+                  />
                 )}
               </Card>
             </Grid.Col>
