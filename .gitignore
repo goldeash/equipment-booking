@@ -1,7 +1,6 @@
 .env
 .env.*
 !.env.example
-appsettings.Development.json
 appsettings.Local.json
 appsettings.Production.json
 *.pfx
@@ -25,16 +24,12 @@ publish/
 
 node_modules/
 dist/
-build/
-.angular/
-.next/
+dist-ssr/
+*.local
 .vite/
 .cache/
 *.tsbuildinfo
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 
 *.db
 *.sqlite
@@ -51,7 +46,9 @@ pgdata/
 Thumbs.db
 desktop.ini
 
-.claude/settings.local.json
+.claude/
+CLAUDE.md
 
 docs/application/
 docs/ba/
+docs/requirements/
