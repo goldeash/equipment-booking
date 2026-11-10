@@ -6,6 +6,7 @@ using EquipmentBooking.Application.Bookings;
 using EquipmentBooking.Application.Catalogue;
 using EquipmentBooking.Application.Common.Paging;
 using EquipmentBooking.Application.Maintenance;
+using EquipmentBooking.Application.Notifications;
 using EquipmentBooking.Application.Settings;
 using EquipmentBooking.Application.Users;
 using EquipmentBooking.Domain.Bookings;
@@ -38,6 +39,45 @@ public sealed class OperationsTests(ApiFactory factory) : IntegrationTest(factor
         var blocked = await BookAsync(employee, itemId, Today.AddDays(7), Today.AddDays(7));
         blocked.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await ReadJsonAsync(blocked)).GetProperty("code").GetString().ShouldBe("booking.item_under_maintenance");
+    }
+
+    [Fact]
+    public async Task Expiry_job_cancels_undecided_and_uncollected_bookings_and_releases_the_items()
+    {
+        var employee = await Factory.SignInAsync(TestData.Employee);
+        var manager = await Factory.SignInAsync(TestData.Manager);
+        var undecided = await ReadAsync<BookingDetails>(await BookAsync(employee, Data.CheapItemIds[18], Today.AddDays(2), Today.AddDays(3)));
+        var uncollected = await ReadAsync<BookingDetails>(await BookAsync(employee, Data.CheapItemIds[19], Today.AddDays(2), Today.AddDays(3)));
+        var current = await ReadAsync<BookingDetails>(await BookAsync(employee, Data.CheapItemIds[18], Today, Today));
+        await manager.PostAsJsonAsync($"/api/v1/bookings/{uncollected.Id}/decisions", new DecideRequest("approved", null), Cancellation);
+        await Factory.ExecuteAsOwnerAsync(
+            "UPDATE app.bookings SET start_date = @start, end_date = @end WHERE id IN (@undecided, @uncollected)",
+            new NpgsqlParameter("start", Today.AddDays(-3)),
+            new NpgsqlParameter("end", Today.AddDays(-1)),
+            new NpgsqlParameter("undecided", undecided.Id),
+            new NpgsqlParameter("uncollected", uncollected.Id));
+
+        using var trigger = new HttpRequestMessage(HttpMethod.Post, "/internal/jobs/expired-bookings/runs");
+        trigger.Headers.Add("X-Job-Key", ApiFactory.JobKey);
+        (await Factory.CreateHttpsClient().SendAsync(trigger, Cancellation)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await ReadAsync<BookingDetails>(await employee.GetAsync($"/api/v1/bookings/{undecided.Id}", Cancellation))).Status.ShouldBe("cancelled");
+        (await ReadAsync<BookingDetails>(await employee.GetAsync($"/api/v1/bookings/{uncollected.Id}", Cancellation))).Status.ShouldBe("cancelled");
+        (await ReadAsync<BookingDetails>(await employee.GetAsync($"/api/v1/bookings/{current.Id}", Cancellation))).Status.ShouldBe("requested");
+
+        var bySystem = await Factory.ScalarAsOwnerAsync<long>(
+            "SELECT count(*) FROM app.booking_status_history WHERE booking_id IN (@a, @b) AND to_status_code = 'cancelled' AND changed_by_user_id IS NULL",
+            new NpgsqlParameter("a", undecided.Id),
+            new NpgsqlParameter("b", uncollected.Id));
+        bySystem.ShouldBe(2);
+
+        var employeeNotifications = await ReadAsync<PagedResult<NotificationResponse>>(await employee.GetAsync("/api/v1/me/notifications?pageSize=100", Cancellation));
+        employeeNotifications.Items.ShouldContain(notification => notification.BookingId == undecided.Id && notification.Type == "request_expired");
+        employeeNotifications.Items.ShouldContain(notification => notification.BookingId == uncollected.Id && notification.Type == "booking_not_collected");
+        var managerNotifications = await ReadAsync<PagedResult<NotificationResponse>>(await manager.GetAsync("/api/v1/me/notifications?pageSize=100", Cancellation));
+        managerNotifications.Items.ShouldContain(notification => notification.BookingId == undecided.Id && notification.Type == "request_expired");
+
+        (await BookAsync(employee, Data.CheapItemIds[19], Today.AddDays(1), Today.AddDays(1))).StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Fact]

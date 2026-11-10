@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<AssessmentLogQueries>();
         services.AddScoped<LoanService>();
         services.AddScoped<LoanMonitoringService>();
+        services.AddScoped<BookingExpiryService>();
         services.AddScoped<MaintenanceService>();
         services.AddScoped<UserAdminService>();
         services.AddScoped<RetentionService>();

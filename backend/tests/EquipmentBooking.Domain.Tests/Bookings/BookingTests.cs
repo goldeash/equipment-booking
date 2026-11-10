@@ -129,6 +129,44 @@ public sealed class BookingTests
     }
 
     [Fact]
+    public void Request_expires_after_its_start_date_without_a_decision()
+    {
+        var booking = TestData.RequestedBooking(startInDays: 1);
+        var startDate = TestData.Today.AddDays(1);
+
+        booking.IsExpired(startDate).ShouldBeFalse();
+        booking.IsExpired(startDate.AddDays(1)).ShouldBeTrue();
+
+        booking.Expire(startDate.AddDays(1));
+        booking.StatusCode.ShouldBe(BookingStatusCodes.Cancelled);
+        booking.IsBlocking.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Approved_booking_expires_after_its_end_date_when_not_collected()
+    {
+        var booking = TestData.ApprovedBooking(startInDays: 0);
+        var endDate = TestData.Today.AddDays(2);
+
+        booking.IsExpired(endDate).ShouldBeFalse();
+        booking.IsExpired(endDate.AddDays(1)).ShouldBeTrue();
+
+        booking.Expire(endDate.AddDays(1));
+        booking.StatusCode.ShouldBe(BookingStatusCodes.Cancelled);
+    }
+
+    [Fact]
+    public void Booking_that_has_not_expired_cannot_be_expired()
+    {
+        var requested = TestData.RequestedBooking(startInDays: 1);
+        Should.Throw<DomainException>(() => requested.Expire(TestData.Today.AddDays(1))).Code.ShouldBe(DomainErrorCodes.InvalidTransition);
+
+        var issued = TestData.IssuedBooking();
+        issued.IsExpired(TestData.Today.AddDays(30)).ShouldBeFalse();
+        Should.Throw<DomainException>(() => issued.Expire(TestData.Today.AddDays(30))).Code.ShouldBe(DomainErrorCodes.InvalidTransition);
+    }
+
+    [Fact]
     public void Issue_before_the_start_date_is_rejected()
     {
         var booking = TestData.ApprovedBooking(startInDays: 3);

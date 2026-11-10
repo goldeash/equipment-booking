@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using EquipmentBooking.Application.Bookings;
 using EquipmentBooking.Application.Loans;
 using EquipmentBooking.Application.Users;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,8 +13,9 @@ public static class JobNames
     public const string OverdueLoans = "overdue-loans";
     public const string ReturnReminders = "return-reminders";
     public const string DataRetention = "data-retention";
+    public const string ExpiredBookings = "expired-bookings";
 
-    public static readonly IReadOnlyList<string> All = [OverdueLoans, ReturnReminders, DataRetention];
+    public static readonly IReadOnlyList<string> All = [OverdueLoans, ReturnReminders, DataRetention, ExpiredBookings];
 }
 
 /// <summary>Job settings bound from the "Jobs" section.</summary>
@@ -63,6 +65,7 @@ public sealed partial class JobRunner
             {
                 JobNames.OverdueLoans => await services.GetRequiredService<LoanMonitoringService>().MarkOverdueLoansAsync(cancellationToken),
                 JobNames.ReturnReminders => await services.GetRequiredService<LoanMonitoringService>().SendReturnRemindersAsync(cancellationToken),
+                JobNames.ExpiredBookings => await services.GetRequiredService<BookingExpiryService>().CancelExpiredBookingsAsync(cancellationToken),
                 _ => await services.GetRequiredService<RetentionService>().AnonymiseExpiredLoansAsync(cancellationToken),
             };
             LogCompleted(_logger, name, processed);

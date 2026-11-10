@@ -11,6 +11,7 @@ Bachelor diploma project, European Humanities University, by Denis Ivanets.
 - Approval route with fixed policy checks (value threshold, specialised items, loan duration, approval switches) and a decision log; the AI purpose check is planned, until then routine requests are routed to the manager
 - Manager queue with the reasons for routing and the requester's return history; decline only with a comment
 - Issue and return with condition, automatic overdue detection, return reminders and in-app notifications
+- Automatic cancellation of requests not decided by the start date and of bookings not collected by the end date
 - Maintenance records that take items out of service and cancel affected bookings after confirmation
 - Users, roles (employee, department manager, administrator), departments and organisation settings
 - Privacy notice, role based access and anonymisation of personal data after the retention period

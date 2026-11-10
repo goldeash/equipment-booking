@@ -8,7 +8,8 @@ namespace EquipmentBooking.Infrastructure.Jobs;
 
 /// <summary>
 /// Runs the jobs once a day at fixed local times of the organisation. Overdue detection runs shortly
-/// after the common return time, so every overdue loan is flagged within one hour (KPI-2). The database
+/// after the common return time, so every overdue loan is flagged within one hour (KPI-2). Expired
+/// bookings are released shortly after midnight, when the previous day is over. The database
 /// is not polled in between, which keeps the serverless database idle. An external daily trigger can
 /// call the same jobs when the host was asleep.
 /// </summary>
@@ -17,6 +18,7 @@ public sealed partial class DailyJobScheduler : BackgroundService
     private static readonly TimeSpan OverdueDelayAfterReturnTime = TimeSpan.FromMinutes(5);
     private static readonly TimeOnly ReminderTime = new(9, 0);
     private static readonly TimeOnly RetentionTime = new(3, 0);
+    private static readonly TimeOnly ExpiryTime = new(0, 10);
 
     private readonly JobRunner _runner;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -46,6 +48,7 @@ public sealed partial class DailyJobScheduler : BackgroundService
         }
 
         await RunSafelyAsync(JobNames.OverdueLoans, stoppingToken);
+        await RunSafelyAsync(JobNames.ExpiredBookings, stoppingToken);
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -82,6 +85,7 @@ public sealed partial class DailyJobScheduler : BackgroundService
             (JobNames.OverdueLoans, NextOccurrence(now, settings.ReturnTime.Add(OverdueDelayAfterReturnTime), zone)),
             (JobNames.ReturnReminders, NextOccurrence(now, ReminderTime, zone)),
             (JobNames.DataRetention, NextOccurrence(now, RetentionTime, zone)),
+            (JobNames.ExpiredBookings, NextOccurrence(now, ExpiryTime, zone)),
         };
         return candidates.MinBy(candidate => candidate.Item2);
     }

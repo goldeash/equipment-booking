@@ -102,6 +102,27 @@ public sealed class Booking : AuditableEntity
         StatusCode = BookingStatusCodes.Cancelled;
     }
 
+    /// <summary>
+    /// True for a request that was not decided by the end of its start date and for an approved booking
+    /// whose item was not collected by the end of its period; such bookings no longer block the item.
+    /// </summary>
+    public bool IsExpired(DateOnly today) =>
+        (StatusCode == BookingStatusCodes.Requested && StartDate < today)
+        || (StatusCode == BookingStatusCodes.Approved && EndDate < today);
+
+    /// <summary>Cancels an expired booking on behalf of the system.</summary>
+    public void Expire(DateOnly today)
+    {
+        if (!IsExpired(today))
+        {
+            throw new DomainException(
+                DomainErrorCodes.InvalidTransition,
+                $"The booking with the status '{StatusCode}' for {StartDate:yyyy-MM-dd} to {EndDate:yyyy-MM-dd} has not expired.");
+        }
+
+        StatusCode = BookingStatusCodes.Cancelled;
+    }
+
     /// <summary>Moves the booking to new dates; the request goes through the approval route again.</summary>
     public void ChangeDates(DateRange period, DateOnly today, DateTimeOffset now)
     {
