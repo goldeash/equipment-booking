@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/EquipmentBooking.Api/EquipmentBooking.Api.csproj" />
     <Project Path="src/EquipmentBooking.Application/EquipmentBooking.Application.csproj" />
+    <Project Path="src/EquipmentBooking.DbSeeder/EquipmentBooking.DbSeeder.csproj" />
     <Project Path="src/EquipmentBooking.Domain/EquipmentBooking.Domain.csproj" />
     <Project Path="src/EquipmentBooking.Infrastructure/EquipmentBooking.Infrastructure.csproj" />
   </Folder>
