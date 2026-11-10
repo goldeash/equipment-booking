@@ -210,7 +210,13 @@ internal sealed class DemoDataGenerator
     {
         var requester = _random.ArrayElement(_data.Users.Where(user => user.Role == RoleCodes.Employee).ToArray());
         var manager = ManagerOf(requester);
-        var createdAt = NotLaterThanNow(At(startDate.AddDays(-_random.Int(2, 12)), new TimeOnly(_random.Int(8, 16), _random.Int(0, 59))), TimeSpan.FromHours(2));
+        var requestedOn = startDate.AddDays(-_random.Int(2, 12));
+        if (requestedOn >= _today)
+        {
+            requestedOn = _today.AddDays(-_random.Int(1, 14));
+        }
+
+        var createdAt = NotLaterThanNow(At(requestedOn, new TimeOnly(_random.Int(8, 16), _random.Int(0, 59))), TimeSpan.FromHours(2));
         var booking = new BookingRow
         {
             Id = _nextBookingId++,
