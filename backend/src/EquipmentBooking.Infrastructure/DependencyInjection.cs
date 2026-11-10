@@ -1,6 +1,8 @@
 using EquipmentBooking.Application.Catalogue;
 using EquipmentBooking.Application.Common.Abstractions;
+using EquipmentBooking.Application.Notifications;
 using EquipmentBooking.Infrastructure.Ai;
+using EquipmentBooking.Infrastructure.Jobs;
 using EquipmentBooking.Infrastructure.Persistence;
 using EquipmentBooking.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +33,11 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHashing, PasswordHashing>();
         services.AddSingleton<IPurposeAssessor, UnavailablePurposeAssessor>();
         services.AddSingleton(TimeProvider.System);
+
+        services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
+        services.Configure<JobOptions>(configuration.GetSection(JobOptions.SectionName));
+        services.AddSingleton<JobRunner>();
+        services.AddHostedService<DailyJobScheduler>();
         return services;
     }
 }
