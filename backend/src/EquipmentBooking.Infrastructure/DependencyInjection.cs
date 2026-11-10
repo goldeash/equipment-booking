@@ -1,3 +1,4 @@
+using EquipmentBooking.Application.Catalogue;
 using EquipmentBooking.Application.Common.Abstractions;
 using EquipmentBooking.Infrastructure.Ai;
 using EquipmentBooking.Infrastructure.Persistence;
@@ -20,6 +21,7 @@ public static class DependencyInjection
 
         services.AddDbContext<AppDbContext>(options => PersistenceOptions.Configure(options, connectionString));
         services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
+        services.AddSingleton<IEquipmentTextSearch, EquipmentTextSearch>();
 
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
