@@ -90,7 +90,8 @@ export const authApi = {
       anonymous: true,
     }),
   refresh: () => request<Session>('/auth/sessions/refresh', { method: 'POST', anonymous: true }),
-  signOut: () => request<undefined>('/auth/sessions/current', { method: 'DELETE', anonymous: true }),
+  signOut: () =>
+    request<undefined>('/auth/sessions/current', { method: 'DELETE', anonymous: true }),
   me: () => request<CurrentUser>('/me'),
   acknowledgePrivacyNotice: () =>
     request<CurrentUser>('/me/privacy-notice-acknowledgement', { method: 'PUT' }),
@@ -175,7 +176,8 @@ export const notificationsApi = {
   list: (params: PageParams & { unreadOnly?: boolean }) =>
     request<PagedResult<NotificationItem>>('/me/notifications', { query: { ...params } }),
   unreadCount: () => request<{ count: number }>('/me/notifications/unread-count'),
-  markRead: (id: number) => request<undefined>(`/me/notifications/${id}/read-state`, { method: 'PUT' }),
+  markRead: (id: number) =>
+    request<undefined>(`/me/notifications/${id}/read-state`, { method: 'PUT' }),
   markAllRead: () => request<undefined>('/me/notifications/read-state', { method: 'PUT' }),
 }
 
