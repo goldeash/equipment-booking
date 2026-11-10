@@ -12,6 +12,8 @@ internal static class PersistenceOptions
     public static void Configure(DbContextOptionsBuilder options, string connectionString) =>
         options
             .UseNpgsql(connectionString, npgsql => npgsql
+                // A serverless database may drop the first connections while it resumes from suspension.
+                .EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorCodesToAdd: null)
                 .MigrationsHistoryTable(MigrationsHistoryTable, AppDbContext.Schema)
                 .MigrationsAssembly(typeof(AppDbContext).Assembly.FullName))
             .UseSnakeCaseNamingConvention()

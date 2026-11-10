@@ -103,11 +103,16 @@ public sealed class AppDbContext : DbContext, IAppDbContext
                 return await base.SaveChangesAsync(cancellationToken);
             }
 
-            await using IDbContextTransaction transaction = await Database.BeginTransactionAsync(cancellationToken);
-            await SetActingUserAsync(cancellationToken);
-            var written = await base.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return written;
+            var strategy = Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async ct =>
+            {
+                await using IDbContextTransaction transaction = await Database.BeginTransactionAsync(ct);
+                await SetActingUserAsync(ct);
+                var written = await base.SaveChangesAsync(acceptAllChangesOnSuccess: false, ct);
+                await transaction.CommitAsync(ct);
+                ChangeTracker.AcceptAllChanges();
+                return written;
+            }, cancellationToken);
         }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException postgres)
         {
