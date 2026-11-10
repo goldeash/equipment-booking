@@ -1,5 +1,18 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/EquipmentBooking.Api/EquipmentBooking.Api.csproj" />
+    <Project Path="src/EquipmentBooking.Application/EquipmentBooking.Application.csproj" />
+    <Project Path="src/EquipmentBooking.Domain/EquipmentBooking.Domain.csproj" />
+    <Project Path="src/EquipmentBooking.Infrastructure/EquipmentBooking.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EquipmentBooking.Api.IntegrationTests/EquipmentBooking.Api.IntegrationTests.csproj" />
+    <Project Path="tests/EquipmentBooking.Application.Tests/EquipmentBooking.Application.Tests.csproj" />
+    <Project Path="tests/EquipmentBooking.Domain.Tests/EquipmentBooking.Domain.Tests.csproj" />
+  </Folder>
+  <Folder Name="/solution-items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
   </Folder>
 </Solution>
