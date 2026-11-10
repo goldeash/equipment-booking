@@ -114,6 +114,30 @@ public sealed class BookingWorkflowTests(ApiFactory factory) : IntegrationTest(f
     }
 
     [Fact]
+    public async Task Approval_queue_pages_do_not_overlap()
+    {
+        var employee = await Factory.SignInAsync(TestData.Employee);
+        foreach (var itemId in Data.CheapItemIds.Skip(15).Take(3))
+        {
+            (await BookAsync(employee, itemId, Today.AddDays(20), Today.AddDays(21))).StatusCode.ShouldBe(HttpStatusCode.Created);
+        }
+
+        var manager = await Factory.SignInAsync(TestData.Manager);
+        var all = await ReadAsync<PagedResult<ApprovalQueueItem>>(await manager.GetAsync("/api/v1/approval-queue?pageSize=100", Cancellation));
+        all.TotalCount.ShouldBeGreaterThanOrEqualTo(3);
+
+        var paged = new List<long>();
+        for (var page = 1; page <= all.TotalCount; page++)
+        {
+            var result = await ReadAsync<PagedResult<ApprovalQueueItem>>(await manager.GetAsync($"/api/v1/approval-queue?page={page}&pageSize=1", Cancellation));
+            result.Page.ShouldBe(page);
+            paged.AddRange(result.Items.Select(item => item.BookingId));
+        }
+
+        paged.ShouldBe(all.Items.Select(item => item.BookingId).ToList());
+    }
+
+    [Fact]
     public async Task Manager_decides_requests_of_the_own_department_only()
     {
         var employee = await Factory.SignInAsync(TestData.Employee);

@@ -28,8 +28,8 @@ public sealed class ApprovalQueueController : ControllerBase
     [HttpGet]
     [ProducesResponseType<PagedResult<ApprovalQueueItem>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
-    public async Task<ActionResult<PagedResult<ApprovalQueueItem>>> Get([FromQuery] PageQuery page, CancellationToken cancellationToken) =>
-        Ok(await _service.GetQueueAsync(page, cancellationToken));
+    public async Task<ActionResult<PagedResult<ApprovalQueueItem>>> Get([FromQuery] PageQuery query, CancellationToken cancellationToken) =>
+        Ok(await _service.GetQueueAsync(query, cancellationToken));
 }
 
 /// <summary>Decision log of the approval route.</summary>
