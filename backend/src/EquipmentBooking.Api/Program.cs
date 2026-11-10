@@ -18,7 +18,10 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     var builder = WebApplication.CreateBuilder(args);
-    builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
+    if (builder.Environment.IsDevelopment())
+    {
+        builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
+    }
 
     var isOpenApiGeneration = OpenApiGenerationDetector.IsOpenApiGeneration();
     if (isOpenApiGeneration)
@@ -34,7 +37,7 @@ try
 
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
-    builder.Services.AddApiSecurity(builder.Configuration, isOpenApiGeneration);
+    builder.Services.AddApiSecurity();
     builder.Services.AddApiServices(builder.Configuration);
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<AppDbContext>("database", tags: [ApiServiceCollectionExtensions.ReadinessTag]);

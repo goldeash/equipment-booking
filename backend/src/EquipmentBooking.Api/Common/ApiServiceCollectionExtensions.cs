@@ -5,6 +5,7 @@ using EquipmentBooking.Api.Common.OpenApi;
 using EquipmentBooking.Api.Common.RateLimiting;
 using EquipmentBooking.Application.Common.Errors;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace EquipmentBooking.Api.Common;
 
@@ -59,7 +60,7 @@ public static class ApiServiceCollectionExtensions
 
     private static void AddApiRateLimiting(this IServiceCollection services, IConfiguration configuration)
     {
-        var settings = configuration.GetSection(RateLimitingOptions.SectionName).Get<RateLimitingOptions>() ?? new RateLimitingOptions();
+        services.Configure<RateLimitingOptions>(configuration.GetSection(RateLimitingOptions.SectionName));
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -81,7 +82,7 @@ public static class ApiServiceCollectionExtensions
                     context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                     _ => new FixedWindowRateLimiterOptions
                     {
-                        PermitLimit = settings.GlobalPermitsPerMinute,
+                        PermitLimit = Limits(context).GlobalPermitsPerMinute,
                         Window = TimeSpan.FromMinutes(1),
                     }));
 
@@ -90,11 +91,14 @@ public static class ApiServiceCollectionExtensions
                     context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                     _ => new FixedWindowRateLimiterOptions
                     {
-                        PermitLimit = settings.AuthenticationPermitsPerMinute,
+                        PermitLimit = Limits(context).AuthenticationPermitsPerMinute,
                         Window = TimeSpan.FromMinutes(1),
                     }));
         });
     }
+
+    private static RateLimitingOptions Limits(HttpContext context) =>
+        context.RequestServices.GetRequiredService<IOptions<RateLimitingOptions>>().Value;
 
     private static string MapStatusToCode(int? status) => status switch
     {

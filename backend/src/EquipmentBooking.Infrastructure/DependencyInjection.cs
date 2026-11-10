@@ -18,10 +18,12 @@ public static class DependencyInjection
     /// <summary>Registers persistence, security services and external adapters.</summary>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString(ConnectionStringName)
-            ?? throw new InvalidOperationException($"The connection string '{ConnectionStringName}' is not configured.");
-
-        services.AddDbContext<AppDbContext>(options => PersistenceOptions.Configure(options, connectionString));
+        services.AddDbContext<AppDbContext>((provider, options) =>
+        {
+            var connectionString = provider.GetRequiredService<IConfiguration>().GetConnectionString(ConnectionStringName)
+                ?? throw new InvalidOperationException($"The connection string '{ConnectionStringName}' is not configured.");
+            PersistenceOptions.Configure(options, connectionString);
+        });
         services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddSingleton<IEquipmentTextSearch, EquipmentTextSearch>();
 
