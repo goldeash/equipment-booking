@@ -145,5 +145,7 @@ internal sealed class NotificationTypeConfiguration() : ReferenceDataConfigurati
         new(NotificationTypeCodes.ReturnReminder, "Return reminder"),
         new(NotificationTypeCodes.LoanOverdue, "Loan overdue"),
         new(NotificationTypeCodes.BookingCancelledByMaintenance, "Booking cancelled because of maintenance"),
+        new(NotificationTypeCodes.RequestExpired, "Request expired without a decision"),
+        new(NotificationTypeCodes.BookingNotCollected, "Booking cancelled because the item was not collected"),
     ];
 }

@@ -7,6 +7,7 @@ The structure is created only by Entity Framework Core migrations stored in Git 
 | 1 | `InitialSchema` | Schema `app`, extensions (`btree_gist`, `citext`, `pg_trgm`), 26 tables with keys, constraints, indexes, comments and reference data |
 | 2 | `BookingRules` | Exclusion constraint against overlapping bookings, triggers, functions, views, full text and trigram indexes |
 | 3 | `DatabaseRoles` | Group roles `app_read`, `app_write`, `app_admin` and their privileges |
+| 4 | `BookingExpiry` | Notification types for requests that expired without a decision and bookings that were not collected |
 
 ## Rules
 

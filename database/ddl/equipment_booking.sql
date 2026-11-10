@@ -1474,3 +1474,24 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM app."__EFMigrationsHistory" WHERE "migration_id" = '20261110214825_BookingExpiry') THEN
+    INSERT INTO app.notification_types (code, name)
+    VALUES ('booking_not_collected', 'Booking cancelled because the item was not collected');
+    INSERT INTO app.notification_types (code, name)
+    VALUES ('request_expired', 'Request expired without a decision');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM app."__EFMigrationsHistory" WHERE "migration_id" = '20261110214825_BookingExpiry') THEN
+    INSERT INTO app."__EFMigrationsHistory" (migration_id, product_version)
+    VALUES ('20261110214825_BookingExpiry', '10.0.15');
+    END IF;
+END $EF$;
+COMMIT;
+

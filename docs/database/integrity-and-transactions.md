@@ -12,7 +12,7 @@ Business rules are enforced twice: by the domain model in the API and by the dat
 | `CHECK` | Date order, purpose length, value not negative, outcome and status lists, decline needs a comment, the assistant never declines, damaged return needs a comment, anonymisation consistency, singleton settings |
 | Exclusion | `ex_bookings_no_overlap`: `EXCLUDE USING gist (equipment_item_id WITH =, daterange(start_date, end_date, '[]') WITH &&) WHERE (status_code IN ('requested','approved','issued','overdue'))` |
 
-The exclusion constraint implements the booking rule: a booking blocks its item from creation until it is declined, cancelled or returned, and an overdue loan keeps blocking. Two requests that overlap cannot both be saved, even when they arrive at the same moment; the second insert fails with SQLSTATE `23P01`, which the API returns as `409 booking.overlap` with the conflicting periods.
+The exclusion constraint implements the booking rule: a booking blocks its item from creation until it is declined, cancelled or returned, and an overdue loan keeps blocking. Two requests that overlap cannot both be saved, even when they arrive at the same moment; the second insert fails with SQLSTATE `23P01`, which the API returns as `409 booking.overlap` with the conflicting periods. A request that no one decided by the end of its start date and an approved booking whose item was not collected by the end of its period are cancelled by a daily job shortly after midnight; the status history records the system as the author of the change, so expired bookings stop blocking the item.
 
 ## Triggers and functions
 

@@ -41,7 +41,7 @@ Database: PostgreSQL 18 (Neon), schema `app`, naming in snake_case. The column t
 | decision_sources | manager, ai_assistant |
 | routing_reasons | high_value, specialised, duration_exceeded, org_auto_approval_off, category_auto_approval_off, purpose_not_confirmed, assistant_unavailable |
 | maintenance_types | inspection, repair, calibration, cleaning |
-| notification_types | request_approved, request_declined, return_reminder, loan_overdue, booking_cancelled_by_maintenance |
+| notification_types | request_approved, request_declined, return_reminder, loan_overdue, booking_cancelled_by_maintenance, request_expired, booking_not_collected |
 
 Reference rows are inserted by the initial migration and are read only for the application role.
 

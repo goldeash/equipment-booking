@@ -68,6 +68,8 @@ public static class NotificationTypeCodes
     public const string ReturnReminder = "return_reminder";
     public const string LoanOverdue = "loan_overdue";
     public const string BookingCancelledByMaintenance = "booking_cancelled_by_maintenance";
+    public const string RequestExpired = "request_expired";
+    public const string BookingNotCollected = "booking_not_collected";
 }
 
 /// <summary>Delivery states of the e-mail copy of a notification.</summary>

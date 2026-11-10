@@ -1306,6 +1306,16 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                         {
                             Code = "booking_cancelled_by_maintenance",
                             Name = "Booking cancelled because of maintenance"
+                        },
+                        new
+                        {
+                            Code = "request_expired",
+                            Name = "Request expired without a decision"
+                        },
+                        new
+                        {
+                            Code = "booking_not_collected",
+                            Name = "Booking cancelled because the item was not collected"
                         });
                 });
 
