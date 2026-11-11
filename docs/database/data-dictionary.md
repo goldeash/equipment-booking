@@ -1,6 +1,6 @@
 # Data dictionary
 
-Database: PostgreSQL 18 (Neon), schema `app`, naming in snake_case. The column tables below are generated from the database catalog and the `COMMENT ON` descriptions written by the migrations (`database/scripts/generate_data_dictionary.sql`), so they always match the deployed structure.
+Database: PostgreSQL 17 or later, schema `app`, naming in snake_case. The column tables below are generated from the database catalog and the `COMMENT ON` descriptions written by the migrations (`database/scripts/generate_data_dictionary.sql`), so they always match the deployed structure.
 
 ## Conventions
 
