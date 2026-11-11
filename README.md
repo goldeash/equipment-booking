@@ -30,41 +30,79 @@ Bachelor diploma project, European Humanities University, by Denis Ivanets.
 
 ```
 backend/                 ASP.NET Core solution (EquipmentBooking.slnx)
-  src/                   Domain, Application, Infrastructure, Api, DbSeeder
+  src/                   Domain, Application, Infrastructure, Api
   tests/                 Domain, Application and API integration tests
+  tools/                 Demo data generator (not deployed)
 frontend/                React single page application
-database/                Generated DDL script, login roles script, demo data
+database/                DDL script generated from the migrations, login roles script, data dictionary query
 docs/                    Documentation: database, frontend, API specification, personal data
 ```
 
 ## Run locally
 
-Prerequisites: .NET SDK 10, Node.js 24 or later, a PostgreSQL 17 or later database.
+Prerequisites: .NET SDK 10, Node.js 24 or later, PostgreSQL 17 or later with `psql`.
 
-1. Create the database structure and the login roles as described in [docs/database/README.md](docs/database/README.md).
-2. Configure the API. In development the API reads `backend/src/EquipmentBooking.Api/appsettings.Local.json` (not committed) or environment variables, see [backend/.env.example](backend/.env.example):
+### 1. Create and fill the database
 
-   ```json
-   {
-     "ConnectionStrings": { "Default": "Host=...;Database=...;Username=eb_api;Password=...;SSL Mode=Require" },
-     "Jwt": { "SigningKey": "<at least 32 characters>" }
-   }
-   ```
+Create an empty database; the user that creates it becomes its owner and runs the next steps (no password is stored in the repository, every value below is chosen by you):
 
-3. Optionally load the demo data with the seeder ([docs/database/test-data.md](docs/database/test-data.md)).
-4. Start the API (http://localhost:5186, reference at http://localhost:5186/docs):
+```bash
+createdb equipment_booking
+```
 
-   ```bash
-   dotnet run --project backend/src/EquipmentBooking.Api --launch-profile http
-   ```
+Create the structure and the reference data from the migrations:
 
-5. Start the frontend (http://localhost:5173; `/api` is proxied to the API):
+```bash
+cd backend
+dotnet tool restore
+export ConnectionStrings__Migrations="Host=localhost;Database=equipment_booking;Username=<owner>;Password=<owner password>"
+dotnet ef database update --project src/EquipmentBooking.Infrastructure --startup-project src/EquipmentBooking.Infrastructure
+cd ..
+```
 
-   ```bash
-   cd frontend
-   npm ci
-   npm run dev
-   ```
+Without the .NET tools the same structure is created by `psql -d equipment_booking -f database/ddl/equipment_booking.sql`.
+
+Create the login roles of the application:
+
+```bash
+psql -d equipment_booking -v api_password=<eb_api password> -v readonly_password=<eb_readonly password> -f database/scripts/create_login_roles.sql
+```
+
+Load the demo data (60 users, 140 items, about 3,600 bookings; details in [docs/database/test-data.md](docs/database/test-data.md)), still with `ConnectionStrings__Migrations` set:
+
+```bash
+export EB_DEMO_PASSWORD="<password of the demo accounts, at least 12 characters>"
+dotnet run --project backend/tools/EquipmentBooking.DbSeeder
+```
+
+The demo accounts are `admin@company.example`, `manager@company.example` and `employee@company.example` with the password from `EB_DEMO_PASSWORD`. All database documents are listed in [docs/database/README.md](docs/database/README.md).
+
+### 2. Configure and start the API
+
+In development the API reads `backend/src/EquipmentBooking.Api/appsettings.Local.json` (not committed) or environment variables, see [backend/.env.example](backend/.env.example). It connects with the `eb_api` login, never as the owner; add `SSL Mode=Require` for a hosted database:
+
+```json
+{
+  "ConnectionStrings": { "Default": "Host=localhost;Database=equipment_booking;Username=eb_api;Password=<eb_api password>" },
+  "Jwt": { "SigningKey": "<at least 32 characters>" }
+}
+```
+
+```bash
+dotnet run --project backend/src/EquipmentBooking.Api --launch-profile http
+```
+
+The API listens on http://localhost:5186 with the interactive reference at http://localhost:5186/docs.
+
+### 3. Start the frontend
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open http://localhost:5173 and sign in with a demo account; `/api` is proxied to the API.
 
 ## Tests
 

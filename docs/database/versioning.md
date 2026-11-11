@@ -17,7 +17,9 @@ The structure is created only by Entity Framework Core migrations stored in Git 
 - `database/ddl/equipment_booking.sql` is the complete idempotent DDL script generated from the migrations and is regenerated with every migration:
 
 ```bash
-dotnet ef migrations script --idempotent --project backend/src/EquipmentBooking.Infrastructure --startup-project backend/src/EquipmentBooking.Infrastructure -o database/ddl/equipment_booking.sql
+cd backend
+dotnet tool restore
+dotnet ef migrations script --idempotent --project src/EquipmentBooking.Infrastructure --startup-project src/EquipmentBooking.Infrastructure -o ../database/ddl/equipment_booking.sql
 ```
 
 - The data dictionary tables are regenerated from the catalog with `database/scripts/generate_data_dictionary.sql`.
@@ -25,8 +27,10 @@ dotnet ef migrations script --idempotent --project backend/src/EquipmentBooking.
 ## Apply the migrations
 
 ```bash
-export ConnectionStrings__Migrations="Host=...;Database=...;Username=<owner>;Password=...;SSL Mode=Require"
-dotnet ef database update --project backend/src/EquipmentBooking.Infrastructure --startup-project backend/src/EquipmentBooking.Infrastructure
+cd backend
+dotnet tool restore
+export ConnectionStrings__Migrations="Host=<host>;Database=<database>;Username=<owner>;Password=<owner password>"
+dotnet ef database update --project src/EquipmentBooking.Infrastructure --startup-project src/EquipmentBooking.Infrastructure
 ```
 
 Alternatively, run `database/ddl/equipment_booking.sql` with psql as the owner.
