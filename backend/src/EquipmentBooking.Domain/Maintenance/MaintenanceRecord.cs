@@ -54,24 +54,3 @@ public sealed class MaintenanceRecord : Entity
     public bool Overlaps(DateRange period) =>
         StartDate <= period.End && (EndDate is null || EndDate.Value >= period.Start);
 }
-
-/// <summary>Codes of maintenance types.</summary>
-public static class MaintenanceTypeCodes
-{
-    public const string Inspection = "inspection";
-    public const string Repair = "repair";
-    public const string Calibration = "calibration";
-    public const string Cleaning = "cleaning";
-}
-
-public sealed class MaintenanceType : ReferenceData
-{
-    private MaintenanceType()
-    {
-    }
-
-    public MaintenanceType(string code, string name)
-        : base(code, name)
-    {
-    }
-}

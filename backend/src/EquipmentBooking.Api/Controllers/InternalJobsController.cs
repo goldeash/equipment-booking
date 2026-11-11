@@ -7,8 +7,6 @@ using Microsoft.Extensions.Options;
 
 namespace EquipmentBooking.Api.Controllers;
 
-public sealed record JobRunResponse(string Job, int? Processed, bool AlreadyRunning);
-
 /// <summary>Trigger for scheduled jobs used by an external scheduler; protected by a shared secret header.</summary>
 [ApiController]
 [Route("internal/jobs")]

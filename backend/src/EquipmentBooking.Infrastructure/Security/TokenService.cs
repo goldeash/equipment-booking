@@ -61,10 +61,3 @@ public sealed class TokenService : ITokenService
     public string HashRefreshToken(string token) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 }
-
-/// <summary>Claim names used in access tokens.</summary>
-public static class AppClaimTypes
-{
-    public const string Role = "role";
-    public const string DepartmentId = "department_id";
-}

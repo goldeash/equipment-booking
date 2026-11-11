@@ -5,64 +5,10 @@ using EquipmentBooking.Application.Common.Paging;
 using EquipmentBooking.Application.Common.Time;
 using EquipmentBooking.Application.Common.Validation;
 using EquipmentBooking.Domain.Bookings;
-using EquipmentBooking.Domain.Catalogue;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 
 namespace EquipmentBooking.Application.Loans;
-
-public sealed record ReturnLoanRequest(string ConditionCode, string? Comment);
-
-public sealed class ReturnLoanRequestValidator : AbstractValidator<ReturnLoanRequest>
-{
-    public ReturnLoanRequestValidator()
-    {
-        RuleFor(request => request.ConditionCode).Must(code => ItemConditionCodes.All.Contains(code))
-            .WithMessage($"'Condition Code' must be one of: {string.Join(", ", ItemConditionCodes.All)}.");
-        RuleFor(request => request.Comment).NotEmpty().When(request => request.ConditionCode == ItemConditionCodes.Damaged)
-            .WithMessage("A comment describing the damage is required.");
-        RuleFor(request => request.Comment).MaximumLength(1000);
-    }
-}
-
-public static class LoanStates
-{
-    /// <summary>Approved bookings whose start date has come and that can be issued.</summary>
-    public const string ReadyToIssue = "ready";
-
-    /// <summary>Issued or overdue loans.</summary>
-    public const string Active = "active";
-
-    public const string Overdue = "overdue";
-
-    public static readonly IReadOnlyList<string> All = [ReadyToIssue, Active, Overdue];
-}
-
-public sealed record LoansQuery : PageQuery
-{
-    public string State { get; init; } = LoanStates.Active;
-}
-
-public sealed class LoansQueryValidator : AbstractValidator<LoansQuery>
-{
-    public LoansQueryValidator()
-    {
-        RuleFor(query => query.State).Must(state => LoanStates.All.Contains(state))
-            .WithMessage($"'State' must be one of: {string.Join(", ", LoanStates.All)}.");
-        RuleFor(query => query.Page).GreaterThanOrEqualTo(1);
-        RuleFor(query => query.PageSize).InclusiveBetween(1, PageQuery.MaxPageSize);
-    }
-}
-
-public sealed record LoanListItem(
-    long BookingId,
-    BookingItemInfo Item,
-    string? RequesterName,
-    DateOnly StartDate,
-    DateOnly EndDate,
-    string Status,
-    DateTimeOffset? IssuedAt,
-    DateTimeOffset? DueAt);
 
 /// <summary>Issue and return of items by administrators (US-13, US-14).</summary>
 public sealed class LoanService

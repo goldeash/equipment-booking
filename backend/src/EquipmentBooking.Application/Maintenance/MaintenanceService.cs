@@ -11,37 +11,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EquipmentBooking.Application.Maintenance;
 
-public sealed record CreateMaintenanceRequest(
-    string MaintenanceTypeCode,
-    DateOnly StartDate,
-    DateOnly? EndDate,
-    bool TakesOutOfService,
-    string Description,
-    bool ConfirmCancellation);
-
-public sealed class CreateMaintenanceRequestValidator : AbstractValidator<CreateMaintenanceRequest>
-{
-    public CreateMaintenanceRequestValidator()
-    {
-        RuleFor(request => request.MaintenanceTypeCode).NotEmpty().MaximumLength(40);
-        RuleFor(request => request.EndDate).GreaterThanOrEqualTo(request => request.StartDate).When(request => request.EndDate.HasValue)
-            .WithMessage("The end date must not be before the start date.");
-        RuleFor(request => request.Description).NotEmpty().MaximumLength(2000);
-    }
-}
-
-public sealed record MaintenanceRecordResponse(
-    long Id,
-    string MaintenanceTypeCode,
-    DateOnly StartDate,
-    DateOnly? EndDate,
-    bool TakesOutOfService,
-    string Description,
-    string RecordedByName,
-    DateTimeOffset CreatedAt);
-
-public sealed record AffectedBooking(long BookingId, DateOnly StartDate, DateOnly EndDate, string Status, string? RequesterName);
-
 /// <summary>Maintenance records; out of service periods cancel affected requests after confirmation (US-30, US-31).</summary>
 public sealed class MaintenanceService
 {

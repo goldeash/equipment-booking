@@ -6,24 +6,6 @@ using FluentValidation;
 
 namespace EquipmentBooking.Application.Settings;
 
-public sealed record ApprovalSettingsResponse(
-    decimal LowValueThreshold,
-    bool AutoApprovalEnabled,
-    int RetentionDays,
-    TimeOnly ReturnTime,
-    string TimeZone);
-
-public sealed record UpdateApprovalSettingsRequest(decimal LowValueThreshold, bool AutoApprovalEnabled, int RetentionDays, TimeOnly ReturnTime);
-
-public sealed class UpdateApprovalSettingsRequestValidator : AbstractValidator<UpdateApprovalSettingsRequest>
-{
-    public UpdateApprovalSettingsRequestValidator()
-    {
-        RuleFor(request => request.LowValueThreshold).GreaterThan(0m).LessThan(10_000_000_000m).PrecisionScale(12, 2, ignoreTrailingZeros: true);
-        RuleFor(request => request.RetentionDays).InclusiveBetween(OrganisationSettings.MinRetentionDays, 3650);
-    }
-}
-
 /// <summary>Organisation settings: low value threshold, automatic approval switch, retention and return time (US-02, US-27).</summary>
 public sealed class SettingsService
 {

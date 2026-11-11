@@ -59,36 +59,3 @@ public sealed class Notification : Entity
         EmailStatus = EmailStatuses.Failed;
     }
 }
-
-/// <summary>Codes of notification types.</summary>
-public static class NotificationTypeCodes
-{
-    public const string RequestApproved = "request_approved";
-    public const string RequestDeclined = "request_declined";
-    public const string ReturnReminder = "return_reminder";
-    public const string LoanOverdue = "loan_overdue";
-    public const string BookingCancelledByMaintenance = "booking_cancelled_by_maintenance";
-    public const string RequestExpired = "request_expired";
-    public const string BookingNotCollected = "booking_not_collected";
-}
-
-/// <summary>Delivery states of the e-mail copy of a notification.</summary>
-public static class EmailStatuses
-{
-    public const string Pending = "pending";
-    public const string Sent = "sent";
-    public const string Failed = "failed";
-    public const string NotRequired = "not_required";
-}
-
-public sealed class NotificationType : ReferenceData
-{
-    private NotificationType()
-    {
-    }
-
-    public NotificationType(string code, string name)
-        : base(code, name)
-    {
-    }
-}

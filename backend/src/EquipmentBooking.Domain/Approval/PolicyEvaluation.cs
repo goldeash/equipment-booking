@@ -45,9 +45,3 @@ public sealed record PolicyEvaluation(
 
     public bool AllPassed => FailedReasons.Count == 0;
 }
-
-/// <summary>Result of the purpose check returned by a purpose assessor.</summary>
-public sealed record PurposeAssessment(string Result, string? Summary, string? ModelName, string? PromptVersion)
-{
-    public static PurposeAssessment Unavailable { get; } = new(PurposeResults.Unavailable, null, null, null);
-}

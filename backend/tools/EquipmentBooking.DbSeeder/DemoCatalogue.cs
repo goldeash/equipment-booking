@@ -118,14 +118,3 @@ internal static class DemoCatalogue
             ], 4),
     ];
 }
-
-internal sealed record CategorySpec(
-    string Name,
-    string Description,
-    int MaxLoanDays,
-    string UsageGuidelines,
-    bool IsSpecialised,
-    ModelSpec[] Models,
-    int ItemCount);
-
-internal sealed record ModelSpec(string Name, decimal Value, string[] Features);

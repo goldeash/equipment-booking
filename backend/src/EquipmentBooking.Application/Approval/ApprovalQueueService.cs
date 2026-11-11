@@ -12,38 +12,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EquipmentBooking.Application.Approval;
 
-public sealed record RoutingReasonInfo(string Code, string Name);
-
-public sealed record ApprovalQueueItem(
-    long BookingId,
-    BookingItemInfo Item,
-    decimal ItemValue,
-    long RequesterId,
-    string RequesterName,
-    DateOnly StartDate,
-    DateOnly EndDate,
-    string Purpose,
-    IReadOnlyList<RoutingReasonInfo> Reasons,
-    string? Summary,
-    DateTimeOffset RequestedAt);
-
-public sealed record DecideRequest(string Outcome, string? Comment);
-
-public sealed class DecideRequestValidator : AbstractValidator<DecideRequest>
-{
-    public DecideRequestValidator()
-    {
-        RuleFor(request => request.Outcome).Must(outcome => outcome is DecisionOutcomes.Approved or DecisionOutcomes.Declined)
-            .WithMessage($"'Outcome' must be '{DecisionOutcomes.Approved}' or '{DecisionOutcomes.Declined}'.");
-        RuleFor(request => request.Comment).NotEmpty().When(request => request.Outcome == DecisionOutcomes.Declined)
-            .WithMessage("A comment is required to decline a request.");
-        RuleFor(request => request.Comment).MaximumLength(1000);
-    }
-}
-
-/// <summary>Return history of a requester shown to the manager (US-12); never sent to the language model.</summary>
-public sealed record RequesterHistoryResponse(long RequesterId, string RequesterName, int LoanCount, int LateReturnCount, DateTimeOffset? LastLateReturnAt);
-
 /// <summary>Queue of routed requests and decisions of department managers (US-10, US-11, US-12).</summary>
 public sealed class ApprovalQueueService
 {
