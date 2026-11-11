@@ -5,15 +5,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\EquipmentBooking.Infrastructure\EquipmentBooking.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\EquipmentBooking.Infrastructure\EquipmentBooking.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Bogus" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <InternalsVisibleTo Include="EquipmentBooking.Application.Tests" />
   </ItemGroup>
 
 </Project>

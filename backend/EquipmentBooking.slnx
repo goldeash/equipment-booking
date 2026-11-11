@@ -2,7 +2,6 @@
   <Folder Name="/src/">
     <Project Path="src/EquipmentBooking.Api/EquipmentBooking.Api.csproj" />
     <Project Path="src/EquipmentBooking.Application/EquipmentBooking.Application.csproj" />
-    <Project Path="src/EquipmentBooking.DbSeeder/EquipmentBooking.DbSeeder.csproj" />
     <Project Path="src/EquipmentBooking.Domain/EquipmentBooking.Domain.csproj" />
     <Project Path="src/EquipmentBooking.Infrastructure/EquipmentBooking.Infrastructure.csproj" />
   </Folder>
@@ -10,6 +9,9 @@
     <Project Path="tests/EquipmentBooking.Api.IntegrationTests/EquipmentBooking.Api.IntegrationTests.csproj" />
     <Project Path="tests/EquipmentBooking.Application.Tests/EquipmentBooking.Application.Tests.csproj" />
     <Project Path="tests/EquipmentBooking.Domain.Tests/EquipmentBooking.Domain.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/EquipmentBooking.DbSeeder/EquipmentBooking.DbSeeder.csproj" />
   </Folder>
   <Folder Name="/solution-items/">
     <File Path="Directory.Build.props" />
