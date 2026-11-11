@@ -1,6 +1,6 @@
 # Database
 
-PostgreSQL 18 hosted on Neon (any PostgreSQL 17 or later works), accessed with Entity Framework Core 10 through the Npgsql provider.
+PostgreSQL 17 or later (developed on PostgreSQL 18), accessed with Entity Framework Core 10 through the Npgsql provider.
 
 | Document | Content |
 |---|---|
@@ -19,7 +19,7 @@ PostgreSQL 18 hosted on Neon (any PostgreSQL 17 or later works), accessed with E
 | Complete DDL script | `database/ddl/equipment_booking.sql` |
 | Login roles script | `database/scripts/create_login_roles.sql` |
 | Data dictionary generator | `database/scripts/generate_data_dictionary.sql` |
-| Demo data | `backend/src/EquipmentBooking.DbSeeder`, `database/seed/demo_data.sql` |
+| Demo data generator | `backend/tools/EquipmentBooking.DbSeeder` |
 
 ## Create a database from scratch
 
