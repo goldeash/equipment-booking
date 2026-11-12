@@ -58,6 +58,7 @@ public sealed class BookingService
         var bookingId = await RunWithConflictDetailsAsync(request.EquipmentItemId, period, async ct =>
         {
             await _db.LockEquipmentItemAsync(request.EquipmentItemId, ct);
+            await EnsureItemNotOverdueAsync(request.EquipmentItemId, ct);
             var item = await _db.EquipmentItems.Include(candidate => candidate.Category)
                 .SingleOrDefaultAsync(candidate => candidate.Id == request.EquipmentItemId, ct)
                 ?? throw new NotFoundException("Equipment item", request.EquipmentItemId);
@@ -86,6 +87,7 @@ public sealed class BookingService
         await RunWithConflictDetailsAsync(itemId, period, async ct =>
         {
             await _db.LockEquipmentItemAsync(itemId, ct);
+            await EnsureItemNotOverdueAsync(itemId, ct);
             var booking = await LoadOwnedAsync(id, ct);
             var item = await _db.EquipmentItems.Include(candidate => candidate.Category).SingleAsync(candidate => candidate.Id == itemId, ct);
             booking.ChangeDates(period, today, _calendar.Now);
@@ -103,7 +105,7 @@ public sealed class BookingService
     public async Task<BookingDetails> CancelAsync(long id, CancellationToken cancellationToken)
     {
         var booking = await LoadOwnedAsync(id, cancellationToken);
-        booking.Cancel();
+        booking.Cancel(CancellationReasonCodes.ByRequester);
         await _db.SaveChangesAsync(cancellationToken);
         return await _reader.GetAsync(id, cancellationToken);
     }
@@ -161,6 +163,18 @@ public sealed class BookingService
     }
 
     /// <summary>Runs the action in a transaction and adds the conflicting dates to an overlap error.</summary>
+    /// <summary>An item with an overdue loan stays blocked until it is returned, so no new dates can be booked.</summary>
+    private async Task EnsureItemNotOverdueAsync(long itemId, CancellationToken cancellationToken)
+    {
+        var overdue = await _db.Bookings.AnyAsync(
+            booking => booking.EquipmentItemId == itemId && booking.StatusCode == BookingStatusCodes.Overdue,
+            cancellationToken);
+        if (overdue)
+        {
+            throw new BusinessRuleException(ErrorCodes.ItemOverdue, "The item has not been returned from an overdue loan yet, so it cannot be booked.");
+        }
+    }
+
     private async Task<long> RunWithConflictDetailsAsync(
         long itemId,
         DateRange period,

@@ -61,8 +61,12 @@ public sealed class OperationsTests(ApiFactory factory) : IntegrationTest(factor
         trigger.Headers.Add("X-Job-Key", ApiFactory.JobKey);
         (await Factory.CreateHttpsClient().SendAsync(trigger, Cancellation)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        (await ReadAsync<BookingDetails>(await employee.GetAsync($"/api/v1/bookings/{undecided.Id}", Cancellation))).Status.ShouldBe("cancelled");
-        (await ReadAsync<BookingDetails>(await employee.GetAsync($"/api/v1/bookings/{uncollected.Id}", Cancellation))).Status.ShouldBe("cancelled");
+        var undecidedDetails = await ReadAsync<BookingDetails>(await employee.GetAsync($"/api/v1/bookings/{undecided.Id}", Cancellation));
+        undecidedDetails.Status.ShouldBe("cancelled");
+        undecidedDetails.Cancellation!.Code.ShouldBe("request_expired");
+        var uncollectedDetails = await ReadAsync<BookingDetails>(await employee.GetAsync($"/api/v1/bookings/{uncollected.Id}", Cancellation));
+        uncollectedDetails.Status.ShouldBe("cancelled");
+        uncollectedDetails.Cancellation!.Code.ShouldBe("not_collected");
         (await ReadAsync<BookingDetails>(await employee.GetAsync($"/api/v1/bookings/{current.Id}", Cancellation))).Status.ShouldBe("requested");
 
         var bySystem = await Factory.ScalarAsOwnerAsync<long>(
@@ -196,7 +200,12 @@ public sealed class OperationsTests(ApiFactory factory) : IntegrationTest(factor
             booking.Routing!.Reasons.ShouldContain("org_auto_approval_off");
 
             var log = await ReadAsync<PagedResult<AssessmentLogEntry>>(await admin.GetAsync("/api/v1/approval-assessments?pageSize=100", Cancellation));
-            log.Items.ShouldContain(entry => entry.BookingId == booking.Id && !entry.OrganisationAutoApprovalEnabled);
+            var entry = log.Items.Single(candidate => candidate.BookingId == booking.Id);
+            entry.Checks.Single(check => check.Code == "organisation_auto_approval").Passed.ShouldBeFalse();
+            var value = entry.Checks.Single(check => check.Code == "value_threshold");
+            value.Passed.ShouldBeTrue();
+            value.LimitValue.ShouldBe(settings.LowValueThreshold);
+            entry.Reasons.ShouldContain("org_auto_approval_off");
         }
         finally
         {

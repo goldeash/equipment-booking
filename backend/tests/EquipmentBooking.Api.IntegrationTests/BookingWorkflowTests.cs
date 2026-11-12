@@ -93,7 +93,9 @@ public sealed class BookingWorkflowTests(ApiFactory factory) : IntegrationTest(f
         (await ReadAsync<BookingDetails>(changed)).StartDate.ShouldBe(Today.AddDays(8));
 
         var cancelled = await employee.PostAsync($"/api/v1/bookings/{booking.Id}/cancellation", null, Cancellation);
-        (await ReadAsync<BookingDetails>(cancelled)).Status.ShouldBe("cancelled");
+        var cancelledDetails = await ReadAsync<BookingDetails>(cancelled);
+        cancelledDetails.Status.ShouldBe("cancelled");
+        cancelledDetails.Cancellation!.Code.ShouldBe("by_requester");
 
         (await BookAsync(employee, Data.CheapItemIds[4], Today.AddDays(8), Today.AddDays(9))).StatusCode.ShouldBe(HttpStatusCode.Created);
     }

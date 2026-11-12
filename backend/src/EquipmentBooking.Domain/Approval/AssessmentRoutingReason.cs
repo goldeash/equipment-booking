@@ -1,15 +1,11 @@
 namespace EquipmentBooking.Domain.Approval;
 
-public sealed class ApprovalAssessmentReason
+/// <summary>Routing reason of an assessment derived by the database from a failed check or the purpose result.</summary>
+public sealed class AssessmentRoutingReason
 {
-    private ApprovalAssessmentReason()
+    private AssessmentRoutingReason()
     {
         RoutingReasonCode = string.Empty;
-    }
-
-    internal ApprovalAssessmentReason(string routingReasonCode)
-    {
-        RoutingReasonCode = routingReasonCode;
     }
 
     public long AssessmentId { get; private set; }

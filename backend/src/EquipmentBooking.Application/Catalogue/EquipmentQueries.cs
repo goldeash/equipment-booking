@@ -45,7 +45,7 @@ public sealed class EquipmentQueries
 
         if (!(query.IncludeRetired && _currentUser.IsInRole(RoleCodes.Administrator)))
         {
-            items = items.Where(item => item.StatusCode != ItemStatusCodes.Retired);
+            items = items.Where(item => item.RetiredAt == null);
         }
 
         if (!string.IsNullOrWhiteSpace(query.Q))
@@ -72,12 +72,15 @@ public sealed class EquipmentQueries
         if (query.AvailableFrom is { } from && query.AvailableTo is { } to)
         {
             items = items.Where(item =>
-                item.StatusCode != ItemStatusCodes.Retired
+                item.RetiredAt == null
                 && !_db.Bookings.Any(booking =>
                     booking.EquipmentItemId == item.Id
                     && BookingStatusCodes.Blocking.Contains(booking.StatusCode)
                     && booking.StartDate <= to
                     && booking.EndDate >= from)
+                && !_db.Bookings.Any(booking =>
+                    booking.EquipmentItemId == item.Id
+                    && booking.StatusCode == BookingStatusCodes.Overdue)
                 && !_db.MaintenanceRecords.Any(record =>
                     record.EquipmentItemId == item.Id
                     && record.TakesOutOfService
@@ -106,7 +109,7 @@ public sealed class EquipmentQueries
                 item.Location!.Name,
                 item.Value,
                 item.ConditionCode,
-                item.StatusCode == ItemStatusCodes.Retired
+                item.RetiredAt != null
                     ? ItemStatusCodes.Retired
                     : _db.MaintenanceRecords.Any(record =>
                         record.EquipmentItemId == item.Id
@@ -139,7 +142,7 @@ public sealed class EquipmentQueries
                 new NamedItem(item.LocationId, item.Location!.Name),
                 item.Value,
                 item.ConditionCode,
-                item.StatusCode == ItemStatusCodes.Retired
+                item.RetiredAt != null
                     ? ItemStatusCodes.Retired
                     : _db.MaintenanceRecords.Any(record =>
                         record.EquipmentItemId == item.Id
@@ -174,8 +177,10 @@ public sealed class EquipmentQueries
                 booking.EquipmentItemId == id
                 && BookingStatusCodes.Blocking.Contains(booking.StatusCode)
                 && booking.StartDate <= query.To
-                && booking.EndDate >= query.From)
-            .Select(booking => new BookedPeriod(booking.StartDate, booking.EndDate, BookedPeriod.BookingKind))
+                && (booking.EndDate >= query.From || booking.StatusCode == BookingStatusCodes.Overdue))
+            .Select(booking => booking.StatusCode == BookingStatusCodes.Overdue
+                ? new BookedPeriod(booking.StartDate, null, BookedPeriod.OverdueKind)
+                : new BookedPeriod(booking.StartDate, booking.EndDate, BookedPeriod.BookingKind))
             .ToListAsync(cancellationToken);
         var maintenance = await _db.MaintenanceRecords.AsNoTracking()
             .Where(record =>

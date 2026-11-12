@@ -83,7 +83,7 @@ public sealed class BookingExpiryService
                 continue;
             }
 
-            foreach (var manager in managers.Where(manager => manager.DepartmentId == departmentId))
+            foreach (var manager in managers.Where(manager => manager.DepartmentId == departmentId && manager.Id != requesterId))
             {
                 _notifications.Notify(
                     manager.Id,

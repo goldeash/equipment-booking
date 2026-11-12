@@ -12,7 +12,6 @@ public sealed class EquipmentItem : AuditableEntity
         InventoryNumber = string.Empty;
         Name = string.Empty;
         ConditionCode = string.Empty;
-        StatusCode = string.Empty;
     }
 
     public EquipmentItem(
@@ -28,7 +27,6 @@ public sealed class EquipmentItem : AuditableEntity
         InventoryNumber = inventoryNumber.Trim();
         Name = string.Empty;
         ConditionCode = conditionCode;
-        StatusCode = ItemStatusCodes.Available;
         Update(name, description, categoryId, locationId, value, isSpecialised);
     }
 
@@ -51,11 +49,10 @@ public sealed class EquipmentItem : AuditableEntity
 
     public string ConditionCode { get; private set; }
 
-    public string StatusCode { get; private set; }
-
     /// <summary>Marks a single item as specialised even if its category is not.</summary>
     public bool IsSpecialised { get; private set; }
 
+    /// <summary>When the item was retired; a retired item can no longer be changed or booked.</summary>
     public DateTimeOffset? RetiredAt { get; private set; }
 
     /// <summary>Concurrency token mapped to the PostgreSQL system column xmin.</summary>
@@ -63,7 +60,7 @@ public sealed class EquipmentItem : AuditableEntity
 
     public IReadOnlyCollection<Feature> Features => _features;
 
-    public bool IsRetired => StatusCode == ItemStatusCodes.Retired;
+    public bool IsRetired => RetiredAt is not null;
 
     public void Update(string name, string? description, long categoryId, long locationId, decimal value, bool isSpecialised)
     {
@@ -98,7 +95,6 @@ public sealed class EquipmentItem : AuditableEntity
     public void Retire(DateTimeOffset now)
     {
         EnsureNotRetired();
-        StatusCode = ItemStatusCodes.Retired;
         RetiredAt = now;
     }
 

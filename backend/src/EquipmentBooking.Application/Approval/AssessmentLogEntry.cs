@@ -6,11 +6,7 @@ public sealed record AssessmentLogEntry(
     string ItemName,
     string InventoryNumber,
     DateTimeOffset AssessedAt,
-    bool ValueCheckPassed,
-    bool SpecialisedCheckPassed,
-    bool DurationCheckPassed,
-    bool OrganisationAutoApprovalEnabled,
-    bool CategoryAutoApprovalEnabled,
+    IReadOnlyList<AssessmentCheckInfo> Checks,
     string PurposeResult,
     string Outcome,
     IReadOnlyList<string> Reasons);

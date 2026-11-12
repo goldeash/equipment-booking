@@ -26,15 +26,18 @@ public sealed class ApprovalPolicyEvaluatorTests
         var evaluation = _evaluator.Evaluate(Context(value: 120m, days: 3));
 
         evaluation.AllPassed.ShouldBeTrue();
+        evaluation.Checks.Select(check => check.CheckTypeCode).ShouldBe(ApprovalCheckTypeCodes.All, ignoreOrder: true);
     }
 
     [Fact]
-    public void Item_at_the_threshold_is_high_value()
+    public void Item_at_the_threshold_is_high_value_and_the_values_are_kept()
     {
         var evaluation = _evaluator.Evaluate(Context(value: 500m, days: 1));
 
-        evaluation.ValueCheckPassed.ShouldBeFalse();
-        evaluation.FailedReasons.ShouldBe([RoutingReasonCodes.HighValue]);
+        Failed(evaluation).ShouldBe([ApprovalCheckTypeCodes.ValueThreshold]);
+        var check = evaluation.Checks.Single(result => result.CheckTypeCode == ApprovalCheckTypeCodes.ValueThreshold);
+        check.ObservedValue.ShouldBe(500m);
+        check.LimitValue.ShouldBe(500m);
     }
 
     [Fact]
@@ -42,15 +45,18 @@ public sealed class ApprovalPolicyEvaluatorTests
     {
         var evaluation = _evaluator.Evaluate(Context(itemSpecialised: true));
 
-        evaluation.FailedReasons.ShouldBe([RoutingReasonCodes.Specialised]);
+        Failed(evaluation).ShouldBe([ApprovalCheckTypeCodes.NotSpecialised]);
     }
 
     [Fact]
-    public void Loan_longer_than_the_category_limit_is_routed()
+    public void Loan_longer_than_the_category_limit_is_routed_with_both_lengths()
     {
         var evaluation = _evaluator.Evaluate(Context(days: 8, maxLoanDays: 7));
 
-        evaluation.FailedReasons.ShouldBe([RoutingReasonCodes.DurationExceeded]);
+        Failed(evaluation).ShouldBe([ApprovalCheckTypeCodes.MaxDuration]);
+        var check = evaluation.Checks.Single(result => result.CheckTypeCode == ApprovalCheckTypeCodes.MaxDuration);
+        check.ObservedValue.ShouldBe(8m);
+        check.LimitValue.ShouldBe(7m);
     }
 
     [Fact]
@@ -64,14 +70,7 @@ public sealed class ApprovalPolicyEvaluatorTests
             organisationAutoApproval: false,
             categoryAutoApproval: false));
 
-        evaluation.FailedReasons.ShouldBe(
-        [
-            RoutingReasonCodes.OrganisationAutoApprovalOff,
-            RoutingReasonCodes.CategoryAutoApprovalOff,
-            RoutingReasonCodes.HighValue,
-            RoutingReasonCodes.Specialised,
-            RoutingReasonCodes.DurationExceeded,
-        ]);
+        Failed(evaluation).ShouldBe(ApprovalCheckTypeCodes.All, ignoreOrder: true);
     }
 
     internal static ApprovalContext Context(
@@ -88,4 +87,7 @@ public sealed class ApprovalPolicyEvaluatorTests
         var settings = new OrganisationSettings(500m, organisationAutoApproval, 365, "Europe/Vilnius", new TimeOnly(18, 0));
         return new ApprovalContext(item, category, settings, new DateRange(Start, Start.AddDays(days - 1)));
     }
+
+    private static IReadOnlyList<string> Failed(PolicyEvaluation evaluation) =>
+        [.. evaluation.Checks.Where(check => !check.Passed).Select(check => check.CheckTypeCode)];
 }

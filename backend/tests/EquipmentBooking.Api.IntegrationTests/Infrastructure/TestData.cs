@@ -73,21 +73,21 @@ public sealed class TestData
             "Drones", "Site inspections by certified pilots.");
 
         var cheapItems = new List<long>();
-        for (var index = 1; index <= 20; index++)
+        for (var index = 1; index <= 30; index++)
         {
             cheapItems.Add(await InsertAsync(
-                "INSERT INTO app.equipment_items (inventory_number, name, description, category_id, location_id, value, condition_code, status_code) "
-                + "VALUES (@p0, @p1, @p2, @p3, @p4, 300, 'good', 'available') RETURNING id",
+                "INSERT INTO app.equipment_items (inventory_number, name, description, category_id, location_id, value, condition_code) "
+                + "VALUES (@p0, @p1, @p2, @p3, @p4, 300, 'good') RETURNING id",
                 $"EQ-TST-{index:000}", $"Test camera {index}", "Compact camera for interviews", cheap, location));
         }
 
         var expensive = await InsertAsync(
-            "INSERT INTO app.equipment_items (inventory_number, name, category_id, location_id, value, condition_code, status_code) "
-            + "VALUES ('EQ-TST-900', 'Cinema camera', @p0, @p1, 4500, 'new', 'available') RETURNING id",
+            "INSERT INTO app.equipment_items (inventory_number, name, category_id, location_id, value, condition_code) "
+            + "VALUES ('EQ-TST-900', 'Cinema camera', @p0, @p1, 4500, 'new') RETURNING id",
             cheap, location);
         var drone = await InsertAsync(
-            "INSERT INTO app.equipment_items (inventory_number, name, category_id, location_id, value, condition_code, status_code) "
-            + "VALUES ('EQ-TST-950', 'Inspection drone', @p0, @p1, 450, 'good', 'available') RETURNING id",
+            "INSERT INTO app.equipment_items (inventory_number, name, category_id, location_id, value, condition_code) "
+            + "VALUES ('EQ-TST-950', 'Inspection drone', @p0, @p1, 450, 'good') RETURNING id",
             specialised, location);
 
         return new TestData

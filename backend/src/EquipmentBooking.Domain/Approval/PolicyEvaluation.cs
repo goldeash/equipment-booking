@@ -1,47 +1,19 @@
 namespace EquipmentBooking.Domain.Approval;
 
-/// <summary>Results of all fixed policy checks of the approval route for one request.</summary>
-public sealed record PolicyEvaluation(
-    bool ValueCheckPassed,
-    bool SpecialisedCheckPassed,
-    bool DurationCheckPassed,
-    bool OrganisationAutoApprovalEnabled,
-    bool CategoryAutoApprovalEnabled)
+/// <summary>Results of all fixed policy checks of the approval route for one request, one per check type.</summary>
+public sealed class PolicyEvaluation
 {
-    /// <summary>Routing reasons of every failed check; empty when all checks passed.</summary>
-    public IReadOnlyList<string> FailedReasons
+    public PolicyEvaluation(IEnumerable<PolicyCheckResult> checks)
     {
-        get
+        Checks = [.. checks];
+        var codes = Checks.Select(check => check.CheckTypeCode).ToList();
+        if (codes.Count != ApprovalCheckTypeCodes.All.Count || codes.Except(ApprovalCheckTypeCodes.All).Any() || codes.Distinct().Count() != codes.Count)
         {
-            var reasons = new List<string>();
-            if (!OrganisationAutoApprovalEnabled)
-            {
-                reasons.Add(RoutingReasonCodes.OrganisationAutoApprovalOff);
-            }
-
-            if (!CategoryAutoApprovalEnabled)
-            {
-                reasons.Add(RoutingReasonCodes.CategoryAutoApprovalOff);
-            }
-
-            if (!ValueCheckPassed)
-            {
-                reasons.Add(RoutingReasonCodes.HighValue);
-            }
-
-            if (!SpecialisedCheckPassed)
-            {
-                reasons.Add(RoutingReasonCodes.Specialised);
-            }
-
-            if (!DurationCheckPassed)
-            {
-                reasons.Add(RoutingReasonCodes.DurationExceeded);
-            }
-
-            return reasons;
+            throw new ArgumentException("An evaluation needs exactly one result for every policy check type.", nameof(checks));
         }
     }
 
-    public bool AllPassed => FailedReasons.Count == 0;
+    public IReadOnlyList<PolicyCheckResult> Checks { get; }
+
+    public bool AllPassed => Checks.All(check => check.Passed);
 }

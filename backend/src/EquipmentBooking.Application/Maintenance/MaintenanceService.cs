@@ -124,7 +124,7 @@ public sealed class MaintenanceService
 
         foreach (var booking in affected)
         {
-            booking.Cancel();
+            booking.Cancel(CancellationReasonCodes.Maintenance);
             if (booking.RequesterId is { } requesterId)
             {
                 _notifications.Notify(

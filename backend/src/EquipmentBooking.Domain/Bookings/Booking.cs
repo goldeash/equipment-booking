@@ -50,6 +50,9 @@ public sealed class Booking : AuditableEntity
 
     public string StatusCode { get; private set; }
 
+    /// <summary>Why the booking was cancelled; set only for the status Cancelled.</summary>
+    public string? CancellationReasonCode { get; private set; }
+
     public Loan? Loan { get; private set; }
 
     /// <summary>Concurrency token mapped to the PostgreSQL system column xmin.</summary>
@@ -72,21 +75,23 @@ public sealed class Booking : AuditableEntity
 
     public void ApproveByManager(long managerId, string? comment, DateTimeOffset now)
     {
-        EnsureStatus(BookingStatusCodes.Requested);
+        EnsureCanMoveTo(BookingStatusCodes.Approved);
+        EnsureNotOwnRequest(managerId);
         AddDecision(BookingDecision.ApprovedByManager(managerId, string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(), now));
         StatusCode = BookingStatusCodes.Approved;
     }
 
     public void ApproveByAssistant(DateTimeOffset now)
     {
-        EnsureStatus(BookingStatusCodes.Requested);
+        EnsureCanMoveTo(BookingStatusCodes.Approved);
         AddDecision(BookingDecision.ApprovedByAssistant(now));
         StatusCode = BookingStatusCodes.Approved;
     }
 
     public void Decline(long managerId, string comment, DateTimeOffset now)
     {
-        EnsureStatus(BookingStatusCodes.Requested);
+        EnsureCanMoveTo(BookingStatusCodes.Declined);
+        EnsureNotOwnRequest(managerId);
         if (string.IsNullOrWhiteSpace(comment))
         {
             throw new DomainException(DomainErrorCodes.DeclineCommentRequired, "A comment is required to decline a request.");
@@ -96,10 +101,17 @@ public sealed class Booking : AuditableEntity
         StatusCode = BookingStatusCodes.Declined;
     }
 
-    public void Cancel()
+    /// <summary>Cancels the booking by the requester or because the item goes out of service.</summary>
+    public void Cancel(string reasonCode)
     {
-        EnsureStatus(BookingStatusCodes.Requested, BookingStatusCodes.Approved);
+        if (reasonCode is not (CancellationReasonCodes.ByRequester or CancellationReasonCodes.Maintenance))
+        {
+            throw new ArgumentException($"'{reasonCode}' is not a reason for a manual cancellation.", nameof(reasonCode));
+        }
+
+        EnsureCanMoveTo(BookingStatusCodes.Cancelled);
         StatusCode = BookingStatusCodes.Cancelled;
+        CancellationReasonCode = reasonCode;
     }
 
     /// <summary>
@@ -110,7 +122,7 @@ public sealed class Booking : AuditableEntity
         (StatusCode == BookingStatusCodes.Requested && StartDate < today)
         || (StatusCode == BookingStatusCodes.Approved && EndDate < today);
 
-    /// <summary>Cancels an expired booking on behalf of the system.</summary>
+    /// <summary>Cancels an expired booking on behalf of the system and records why.</summary>
     public void Expire(DateOnly today)
     {
         if (!IsExpired(today))
@@ -120,13 +132,20 @@ public sealed class Booking : AuditableEntity
                 $"The booking with the status '{StatusCode}' for {StartDate:yyyy-MM-dd} to {EndDate:yyyy-MM-dd} has not expired.");
         }
 
+        CancellationReasonCode = StatusCode == BookingStatusCodes.Requested
+            ? CancellationReasonCodes.RequestExpired
+            : CancellationReasonCodes.NotCollected;
         StatusCode = BookingStatusCodes.Cancelled;
     }
 
     /// <summary>Moves the booking to new dates; the request goes through the approval route again.</summary>
     public void ChangeDates(DateRange period, DateOnly today, DateTimeOffset now)
     {
-        EnsureStatus(BookingStatusCodes.Requested, BookingStatusCodes.Approved);
+        if (StatusCode != BookingStatusCodes.Requested)
+        {
+            EnsureCanMoveTo(BookingStatusCodes.Requested);
+        }
+
         EnsureNotInPast(period, today);
         CurrentDecision?.Supersede(now);
         StartDate = period.Start;
@@ -136,7 +155,7 @@ public sealed class Booking : AuditableEntity
 
     public void Issue(long administratorId, DateOnly today, DateTimeOffset dueAt, DateTimeOffset now)
     {
-        EnsureStatus(BookingStatusCodes.Approved);
+        EnsureCanMoveTo(BookingStatusCodes.Issued);
         if (StartDate > today)
         {
             throw new DomainException(DomainErrorCodes.StartDateNotReached, "The item can be issued from the start date of the booking.");
@@ -148,13 +167,13 @@ public sealed class Booking : AuditableEntity
 
     public void MarkOverdue()
     {
-        EnsureStatus(BookingStatusCodes.Issued);
+        EnsureCanMoveTo(BookingStatusCodes.Overdue);
         StatusCode = BookingStatusCodes.Overdue;
     }
 
     public void Return(long administratorId, string conditionCode, string? comment, DateTimeOffset now)
     {
-        EnsureStatus(BookingStatusCodes.Issued, BookingStatusCodes.Overdue);
+        EnsureCanMoveTo(BookingStatusCodes.Returned);
         Loan!.RecordReturn(administratorId, conditionCode, comment, now);
         StatusCode = BookingStatusCodes.Returned;
     }
@@ -193,6 +212,24 @@ public sealed class Booking : AuditableEntity
     {
         CurrentDecision?.Supersede(decision.DecidedAt);
         _decisions.Add(decision);
+    }
+
+    private void EnsureCanMoveTo(string target)
+    {
+        if (!BookingStatusCodes.CanChange(StatusCode, target))
+        {
+            throw new DomainException(
+                DomainErrorCodes.InvalidTransition,
+                $"A booking with the status '{StatusCode}' cannot change to '{target}'.");
+        }
+    }
+
+    private void EnsureNotOwnRequest(long managerId)
+    {
+        if (RequesterId == managerId)
+        {
+            throw new DomainException(DomainErrorCodes.OwnRequest, "A manager cannot decide on an own request.");
+        }
     }
 
     private void EnsureStatus(params string[] allowed)

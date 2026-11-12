@@ -12,7 +12,6 @@ internal sealed class BookingDecisionConfiguration : IEntityTypeConfiguration<Bo
         builder.ToTable("booking_decisions", table =>
         {
             table.HasComment("Decisions on requests. A date change supersedes the current decision, so a booking can have several.");
-            table.HasCheckConstraint("ck_booking_decisions_outcome", "outcome IN ('approved', 'declined')");
             table.HasCheckConstraint("ck_booking_decisions_decline_comment", "outcome <> 'declined' OR comment IS NOT NULL");
             table.HasCheckConstraint(
                 "ck_booking_decisions_assistant_never_declines",
@@ -25,11 +24,15 @@ internal sealed class BookingDecisionConfiguration : IEntityTypeConfiguration<Bo
         builder.HasOne<DecisionSource>().WithMany().HasForeignKey(decision => decision.DecisionSourceCode).OnDelete(DeleteBehavior.Restrict);
         builder.Property(decision => decision.DecidedByUserId).HasComment("Manager who decided; null for the assistant.");
         builder.HasOne<User>().WithMany().HasForeignKey(decision => decision.DecidedByUserId).OnDelete(DeleteBehavior.Restrict);
-        builder.Property(decision => decision.Outcome).HasMaxLength(20).IsRequired().HasComment("approved or declined; the assistant can only approve.");
+        builder.Property(decision => decision.Outcome).HasMaxLength(ReferenceDataConfiguration<DecisionOutcome>.CodeLength).IsRequired().HasComment("Approved or declined; the assistant can only approve.");
+        builder.HasOne<DecisionOutcome>().WithMany().HasForeignKey(decision => decision.Outcome).OnDelete(DeleteBehavior.Restrict);
         builder.Property(decision => decision.Comment).HasMaxLength(1000).HasComment("Comment of the manager; required for a decline.");
         builder.Property(decision => decision.DecidedAt).HasComment("Decision time.");
         builder.Property(decision => decision.SupersededAt).HasComment("Set when a date change sends the booking through the route again.");
         builder.Ignore(decision => decision.IsCurrent);
+        builder.HasIndex(decision => decision.Outcome).HasDatabaseName("ix_booking_decisions_outcome");
+        builder.HasIndex(decision => decision.DecisionSourceCode).HasDatabaseName("ix_booking_decisions_decision_source_code");
+        builder.HasIndex(decision => decision.DecidedByUserId).HasDatabaseName("ix_booking_decisions_decided_by_user_id");
         builder.HasIndex(decision => decision.BookingId)
             .IsUnique()
             .HasFilter("superseded_at IS NULL")

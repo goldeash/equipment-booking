@@ -12,7 +12,6 @@ internal sealed class EquipmentItemConfiguration : IEntityTypeConfiguration<Equi
         {
             table.HasComment("Physical items of shared equipment.");
             table.HasCheckConstraint("ck_equipment_items_value", "value >= 0");
-            table.HasCheckConstraint("ck_equipment_items_retired", "(status_code = 'retired') = (retired_at IS NOT NULL)");
         });
         builder.Property(item => item.Id).HasComment("Surrogate key.");
         builder.Property(item => item.InventoryNumber).HasMaxLength(30).IsRequired().HasComment("Unique inventory number printed on the item.");
@@ -26,10 +25,8 @@ internal sealed class EquipmentItemConfiguration : IEntityTypeConfiguration<Equi
         builder.Property(item => item.Value).HasPrecision(12, 2).HasComment("Replacement value in EUR; compared with the low value threshold.");
         builder.Property(item => item.ConditionCode).HasMaxLength(ReferenceDataConfiguration<ItemCondition>.CodeLength).IsRequired().HasComment("Current physical condition.");
         builder.HasOne<ItemCondition>().WithMany().HasForeignKey(item => item.ConditionCode).OnDelete(DeleteBehavior.Restrict);
-        builder.Property(item => item.StatusCode).HasMaxLength(ReferenceDataConfiguration<ItemStatus>.CodeLength).IsRequired().HasComment("Stored status: available or retired.");
-        builder.HasOne<ItemStatus>().WithMany().HasForeignKey(item => item.StatusCode).OnDelete(DeleteBehavior.Restrict);
         builder.Property(item => item.IsSpecialised).HasDefaultValue(false).HasComment("Item level override: specialised even if the category is not.");
-        builder.Property(item => item.RetiredAt).HasComment("When the item was retired; set together with the status retired.");
+        builder.Property(item => item.RetiredAt).HasComment("When the item was retired; null while the item is in use. The effective status is derived from this column and active maintenance.");
         builder.Property(item => item.Version).IsRowVersion();
         builder.Property(item => item.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd().HasComment("Creation time.");
         builder.Property(item => item.UpdatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAddOrUpdate().HasComment("Last change time, set by trigger.");

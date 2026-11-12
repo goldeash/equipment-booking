@@ -21,4 +21,24 @@ public static class BookingStatusCodes
     public static readonly IReadOnlyList<string> OnLoan = [Issued, Overdue];
 
     public static readonly IReadOnlyList<string> All = [Requested, Approved, Declined, Cancelled, Issued, Returned, Overdue];
+
+    /// <summary>
+    /// Allowed status changes of a booking. The same pairs are stored in the table
+    /// booking_status_transitions, which the database enforces; a test keeps both in step.
+    /// A date change sends an approved booking back to Requested.
+    /// </summary>
+    public static readonly IReadOnlyList<(string From, string To)> Transitions =
+    [
+        (Requested, Approved),
+        (Requested, Declined),
+        (Requested, Cancelled),
+        (Approved, Requested),
+        (Approved, Issued),
+        (Approved, Cancelled),
+        (Issued, Overdue),
+        (Issued, Returned),
+        (Overdue, Returned),
+    ];
+
+    public static bool CanChange(string from, string to) => Transitions.Contains((from, to));
 }

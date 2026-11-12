@@ -121,11 +121,13 @@ public sealed class BookingTests
     public void Cancel_is_possible_before_issue_only()
     {
         var approved = TestData.ApprovedBooking();
-        approved.Cancel();
+        approved.Cancel(CancellationReasonCodes.ByRequester);
         approved.StatusCode.ShouldBe(BookingStatusCodes.Cancelled);
+        approved.CancellationReasonCode.ShouldBe(CancellationReasonCodes.ByRequester);
 
         var issued = TestData.IssuedBooking();
-        Should.Throw<DomainException>(issued.Cancel).Code.ShouldBe(DomainErrorCodes.InvalidTransition);
+        Should.Throw<DomainException>(() => issued.Cancel(CancellationReasonCodes.ByRequester)).Code.ShouldBe(DomainErrorCodes.InvalidTransition);
+        Should.Throw<ArgumentException>(() => TestData.RequestedBooking().Cancel(CancellationReasonCodes.RequestExpired));
     }
 
     [Fact]
@@ -164,6 +166,46 @@ public sealed class BookingTests
         var issued = TestData.IssuedBooking();
         issued.IsExpired(TestData.Today.AddDays(30)).ShouldBeFalse();
         Should.Throw<DomainException>(() => issued.Expire(TestData.Today.AddDays(30))).Code.ShouldBe(DomainErrorCodes.InvalidTransition);
+    }
+
+    [Fact]
+    public void Expiry_records_why_the_booking_was_cancelled()
+    {
+        var requested = TestData.RequestedBooking(startInDays: 1);
+        requested.Expire(TestData.Today.AddDays(2));
+        requested.CancellationReasonCode.ShouldBe(CancellationReasonCodes.RequestExpired);
+
+        var approved = TestData.ApprovedBooking(startInDays: 0);
+        approved.Expire(TestData.Today.AddDays(3));
+        approved.CancellationReasonCode.ShouldBe(CancellationReasonCodes.NotCollected);
+    }
+
+    [Fact]
+    public void Manager_cannot_decide_an_own_request()
+    {
+        var booking = TestData.RequestedBooking(requesterId: 2);
+
+        Should.Throw<DomainException>(() => booking.ApproveByManager(2, null, TestData.Now)).Code.ShouldBe(DomainErrorCodes.OwnRequest);
+        Should.Throw<DomainException>(() => booking.Decline(2, "No", TestData.Now)).Code.ShouldBe(DomainErrorCodes.OwnRequest);
+        booking.StatusCode.ShouldBe(BookingStatusCodes.Requested);
+        booking.Decisions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Transitions_connect_known_statuses_and_end_in_final_statuses()
+    {
+        BookingStatusCodes.Transitions.ShouldAllBe(transition =>
+            BookingStatusCodes.All.Contains(transition.From) && BookingStatusCodes.All.Contains(transition.To) && transition.From != transition.To);
+        BookingStatusCodes.Transitions.Distinct().Count().ShouldBe(BookingStatusCodes.Transitions.Count);
+        foreach (var final in new[] { BookingStatusCodes.Declined, BookingStatusCodes.Cancelled, BookingStatusCodes.Returned })
+        {
+            BookingStatusCodes.Transitions.ShouldNotContain(transition => transition.From == final);
+        }
+
+        BookingStatusCodes.CanChange(BookingStatusCodes.Returned, BookingStatusCodes.Requested).ShouldBeFalse();
+        var overdue = TestData.IssuedBooking();
+        overdue.MarkOverdue();
+        Should.Throw<DomainException>(overdue.MarkOverdue).Code.ShouldBe(DomainErrorCodes.InvalidTransition);
     }
 
     [Fact]

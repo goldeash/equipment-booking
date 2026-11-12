@@ -16,4 +16,5 @@ public static class DomainErrorCodes
     public const string InvalidThreshold = "settings.invalid_threshold";
     public const string InvalidRetentionPeriod = "settings.invalid_retention_period";
     public const string InvalidMaintenancePeriod = "maintenance.invalid_period";
+    public const string OwnRequest = "booking.own_request";
 }

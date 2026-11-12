@@ -41,6 +41,13 @@ public interface IAppDbContext
 
     DbSet<RoutingReason> RoutingReasons { get; }
 
+    DbSet<ApprovalCheckType> ApprovalCheckTypes { get; }
+
+    /// <summary>Routing reasons derived from failed checks and the purpose result, read from the view v_assessment_routing_reasons.</summary>
+    DbSet<AssessmentRoutingReason> AssessmentRoutingReasons { get; }
+
+    DbSet<CancellationReason> CancellationReasons { get; }
+
     DbSet<MaintenanceRecord> MaintenanceRecords { get; }
 
     DbSet<MaintenanceType> MaintenanceTypes { get; }

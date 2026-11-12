@@ -18,6 +18,7 @@ public static class ErrorCodes
     public const string BookingOverlap = "booking.overlap";
     public const string ItemUnderMaintenance = "booking.item_under_maintenance";
     public const string ItemStillOnLoan = "booking.item_still_on_loan";
+    public const string ItemOverdue = "booking.item_overdue";
     public const string DuplicateInventoryNumber = "equipment.duplicate_inventory_number";
     public const string ItemHasFutureBookings = "equipment.has_future_bookings";
     public const string DuplicateName = "reference.duplicate_name";

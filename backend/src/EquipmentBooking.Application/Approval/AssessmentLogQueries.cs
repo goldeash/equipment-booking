@@ -49,14 +49,22 @@ public sealed class AssessmentLogQueries
                 row.booking.EquipmentItem!.Name,
                 row.booking.EquipmentItem.InventoryNumber,
                 row.assessment.AssessedAt,
-                row.assessment.ValueCheckPassed,
-                row.assessment.SpecialisedCheckPassed,
-                row.assessment.DurationCheckPassed,
-                row.assessment.OrganisationAutoApprovalEnabled,
-                row.assessment.CategoryAutoApprovalEnabled,
+                row.assessment.Checks
+                    .OrderBy(check => check.CheckTypeCode)
+                    .Select(check => new AssessmentCheckInfo(
+                        check.CheckTypeCode,
+                        _db.ApprovalCheckTypes.Where(type => type.Code == check.CheckTypeCode).Select(type => type.Name).First(),
+                        check.Passed,
+                        check.ObservedValue,
+                        check.LimitValue))
+                    .ToList(),
                 row.assessment.PurposeResult,
                 row.assessment.Outcome,
-                row.assessment.Reasons.Select(reason => reason.RoutingReasonCode).ToList()))
+                _db.AssessmentRoutingReasons
+                    .Where(reason => reason.AssessmentId == row.assessment.Id)
+                    .Select(reason => reason.RoutingReasonCode)
+                    .OrderBy(code => code)
+                    .ToList()))
             .ToPagedResultAsync(query, cancellationToken);
     }
 }

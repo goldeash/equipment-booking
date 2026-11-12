@@ -3,12 +3,13 @@ using EquipmentBooking.Domain.Common;
 namespace EquipmentBooking.Domain.Approval;
 
 /// <summary>
-/// Log entry of the approval route for one request: the result of every policy check, the
-/// purpose check and the outcome. Every failed check is stored as a routing reason.
+/// Log entry of the approval route for one request: the result of every policy check with the values
+/// it compared, the purpose check and the outcome. The routing reasons are derived from the failed
+/// checks and the purpose result, so they are never stored twice.
 /// </summary>
 public sealed class ApprovalAssessment : Entity
 {
-    private readonly List<ApprovalAssessmentReason> _reasons = [];
+    private readonly List<ApprovalCheck> _checks = [];
 
     private ApprovalAssessment()
     {
@@ -20,41 +21,22 @@ public sealed class ApprovalAssessment : Entity
     {
         BookingId = bookingId;
         AssessedAt = assessedAt;
-        ValueCheckPassed = evaluation.ValueCheckPassed;
-        SpecialisedCheckPassed = evaluation.SpecialisedCheckPassed;
-        DurationCheckPassed = evaluation.DurationCheckPassed;
-        OrganisationAutoApprovalEnabled = evaluation.OrganisationAutoApprovalEnabled;
-        CategoryAutoApprovalEnabled = evaluation.CategoryAutoApprovalEnabled;
-        foreach (var reason in evaluation.FailedReasons)
-        {
-            _reasons.Add(new ApprovalAssessmentReason(reason));
-        }
-
-        if (_reasons.Count > 0)
-        {
-            PurposeResult = PurposeResults.NotRun;
-            Outcome = AssessmentOutcomes.Routed;
-        }
-        else
+        _checks.AddRange(evaluation.Checks.Select(check => new ApprovalCheck(check)));
+        if (evaluation.AllPassed)
         {
             PurposeResult = PurposeResults.Pending;
             Outcome = AssessmentOutcomes.Pending;
+        }
+        else
+        {
+            PurposeResult = PurposeResults.NotRun;
+            Outcome = AssessmentOutcomes.Routed;
         }
     }
 
     public long BookingId { get; private set; }
 
     public DateTimeOffset AssessedAt { get; private set; }
-
-    public bool ValueCheckPassed { get; private set; }
-
-    public bool SpecialisedCheckPassed { get; private set; }
-
-    public bool DurationCheckPassed { get; private set; }
-
-    public bool OrganisationAutoApprovalEnabled { get; private set; }
-
-    public bool CategoryAutoApprovalEnabled { get; private set; }
 
     public string PurposeResult { get; private set; }
 
@@ -66,7 +48,7 @@ public sealed class ApprovalAssessment : Entity
 
     public string? PromptVersion { get; private set; }
 
-    public IReadOnlyCollection<ApprovalAssessmentReason> Reasons => _reasons;
+    public IReadOnlyCollection<ApprovalCheck> Checks => _checks;
 
     public bool IsPending => Outcome == AssessmentOutcomes.Pending;
 
@@ -78,20 +60,15 @@ public sealed class ApprovalAssessment : Entity
             throw new DomainException(DomainErrorCodes.InvalidTransition, "The assessment is already completed.");
         }
 
+        if (assessment.Result is not (PurposeResults.Match or PurposeResults.NoMatch or PurposeResults.Unavailable))
+        {
+            throw new ArgumentException($"'{assessment.Result}' is not a result of a completed purpose check.", nameof(assessment));
+        }
+
         PurposeResult = assessment.Result;
         Summary = assessment.Summary;
         ModelName = assessment.ModelName;
         PromptVersion = assessment.PromptVersion;
-        if (assessment.Result == PurposeResults.Match)
-        {
-            Outcome = AssessmentOutcomes.Approved;
-            return;
-        }
-
-        Outcome = AssessmentOutcomes.Routed;
-        var reason = assessment.Result == PurposeResults.NoMatch
-            ? RoutingReasonCodes.PurposeNotConfirmed
-            : RoutingReasonCodes.AssistantUnavailable;
-        _reasons.Add(new ApprovalAssessmentReason(reason));
+        Outcome = assessment.Result == PurposeResults.Match ? AssessmentOutcomes.Approved : AssessmentOutcomes.Routed;
     }
 }

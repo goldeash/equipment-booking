@@ -1,9 +1,9 @@
+using EquipmentBooking.Domain.Approval;
+
 namespace EquipmentBooking.Application.Approval;
 
-/// <summary>One fixed policy check of the approval route; new checks are added as new implementations.</summary>
+/// <summary>One fixed policy check of the approval route; every check type has exactly one implementation.</summary>
 public interface IApprovalPolicyCheck
 {
-    PolicyCheckKind Kind { get; }
-
-    bool IsSatisfied(ApprovalContext context);
+    PolicyCheckResult Evaluate(ApprovalContext context);
 }

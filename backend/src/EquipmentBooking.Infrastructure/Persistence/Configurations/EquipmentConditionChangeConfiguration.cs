@@ -11,7 +11,7 @@ internal sealed class EquipmentConditionChangeConfiguration : IEntityTypeConfigu
         builder.ToTable("equipment_condition_changes", table => table.HasComment("History of condition changes of items, written by trigger."));
         builder.Property(change => change.Id).HasComment("Surrogate key.");
         builder.Property(change => change.EquipmentItemId).HasComment("Item whose condition changed.");
-        builder.HasOne<EquipmentItem>().WithMany().HasForeignKey(change => change.EquipmentItemId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<EquipmentItem>().WithMany().HasForeignKey(change => change.EquipmentItemId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(change => change.FromConditionCode).HasMaxLength(ReferenceDataConfiguration<ItemCondition>.CodeLength).HasComment("Previous condition; null for a new item.");
         builder.HasOne<ItemCondition>().WithMany().HasForeignKey(change => change.FromConditionCode).OnDelete(DeleteBehavior.Restrict);
         builder.Property(change => change.ToConditionCode).HasMaxLength(ReferenceDataConfiguration<ItemCondition>.CodeLength).IsRequired().HasComment("New condition.");

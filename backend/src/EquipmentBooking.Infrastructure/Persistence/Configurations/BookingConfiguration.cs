@@ -11,11 +11,13 @@ internal sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
     {
         builder.ToTable("bookings", table =>
         {
-            table.HasComment("Requests for an item for a date range. A request blocks the item from creation until it is declined, cancelled or returned.");
+            table.HasComment("Requests for an item for a date range. A request blocks the item from creation until it is declined, cancelled or returned; an overdue loan blocks the item until it is returned.");
             table.HasCheckConstraint("ck_bookings_dates", "end_date >= start_date");
             table.HasCheckConstraint("ck_bookings_purpose_length", "char_length(purpose) BETWEEN 3 AND 1000");
             table.HasCheckConstraint("ck_bookings_anonymised", "(requester_id IS NULL) = (anonymised_at IS NOT NULL)");
             table.HasCheckConstraint("ck_bookings_anonymous_ref", "anonymised_at IS NULL OR anonymous_ref IS NOT NULL");
+            table.HasCheckConstraint("ck_bookings_anonymised_returned", "anonymised_at IS NULL OR status_code = 'returned'");
+            table.HasCheckConstraint("ck_bookings_cancellation_reason", "(status_code = 'cancelled') = (cancellation_reason_code IS NOT NULL)");
         });
         builder.Property(booking => booking.Id).HasComment("Surrogate key.");
         builder.Property(booking => booking.EquipmentItemId).HasComment("Requested item.");
@@ -29,6 +31,8 @@ internal sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Property(booking => booking.Purpose).HasMaxLength(1000).IsRequired().HasComment("Purpose stated by the employee; must not contain personal data.");
         builder.Property(booking => booking.StatusCode).HasMaxLength(ReferenceDataConfiguration<BookingStatus>.CodeLength).IsRequired().HasComment("Current status.");
         builder.HasOne<BookingStatus>().WithMany().HasForeignKey(booking => booking.StatusCode).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(booking => booking.CancellationReasonCode).HasMaxLength(ReferenceDataConfiguration<CancellationReason>.CodeLength).HasComment("Why the booking was cancelled; set exactly when the status is cancelled.");
+        builder.HasOne<CancellationReason>().WithMany().HasForeignKey(booking => booking.CancellationReasonCode).OnDelete(DeleteBehavior.Restrict);
         builder.Property(booking => booking.Version).IsRowVersion();
         builder.Property(booking => booking.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd().HasComment("Creation time.");
         builder.Property(booking => booking.UpdatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAddOrUpdate().HasComment("Last change time, set by trigger.");
@@ -36,12 +40,13 @@ internal sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Ignore(booking => booking.CurrentDecision);
         builder.Ignore(booking => booking.IsBlocking);
 
-        builder.HasMany(booking => booking.Decisions).WithOne().HasForeignKey(decision => decision.BookingId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasMany(booking => booking.Decisions).WithOne().HasForeignKey(decision => decision.BookingId).OnDelete(DeleteBehavior.Restrict);
         builder.Navigation(booking => booking.Decisions).UsePropertyAccessMode(PropertyAccessMode.Field);
-        builder.HasOne(booking => booking.Loan).WithOne().HasForeignKey<Loan>(loan => loan.BookingId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(booking => booking.Loan).WithOne().HasForeignKey<Loan>(loan => loan.BookingId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(booking => booking.RequesterId).HasDatabaseName("ix_bookings_requester_id");
         builder.HasIndex(booking => new { booking.EquipmentItemId, booking.StartDate }).HasDatabaseName("ix_bookings_item_start_date");
         builder.HasIndex(booking => new { booking.StatusCode, booking.StartDate }).HasDatabaseName("ix_bookings_status_start_date");
+        builder.HasIndex(booking => booking.CancellationReasonCode).HasDatabaseName("ix_bookings_cancellation_reason_code");
     }
 }

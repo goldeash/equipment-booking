@@ -33,6 +33,12 @@ public sealed class BookingReader
                 booking.EndDate,
                 booking.Purpose,
                 booking.StatusCode,
+                Cancellation = booking.CancellationReasonCode == null
+                    ? null
+                    : _db.CancellationReasons
+                        .Where(reason => reason.Code == booking.CancellationReasonCode)
+                        .Select(reason => new CancellationInfo(reason.Code, reason.Name))
+                        .FirstOrDefault(),
                 booking.CreatedAt,
                 Decision = booking.Decisions
                     .Where(decision => decision.SupersededAt == null)
@@ -53,7 +59,11 @@ public sealed class BookingReader
                     .Select(assessment => new RoutingInfo(
                         assessment.Outcome,
                         assessment.PurposeResult,
-                        assessment.Reasons.Select(reason => reason.RoutingReasonCode).ToList(),
+                        _db.AssessmentRoutingReasons
+                            .Where(reason => reason.AssessmentId == assessment.Id)
+                            .Select(reason => reason.RoutingReasonCode)
+                            .OrderBy(code => code)
+                            .ToList(),
                         assessment.Summary,
                         assessment.AssessedAt))
                     .FirstOrDefault(),
@@ -79,6 +89,7 @@ public sealed class BookingReader
             row.EndDate,
             row.Purpose,
             row.StatusCode,
+            row.Cancellation,
             row.Decision,
             row.Loan,
             row.Routing,

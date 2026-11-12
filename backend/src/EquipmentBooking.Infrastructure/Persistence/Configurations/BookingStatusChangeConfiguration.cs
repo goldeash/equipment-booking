@@ -12,7 +12,7 @@ internal sealed class BookingStatusChangeConfiguration : IEntityTypeConfiguratio
         builder.ToTable("booking_status_history", table => table.HasComment("Every status change of a booking, written by trigger."));
         builder.Property(change => change.Id).HasComment("Surrogate key.");
         builder.Property(change => change.BookingId).HasComment("Changed booking.");
-        builder.HasOne<Booking>().WithMany().HasForeignKey(change => change.BookingId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<Booking>().WithMany().HasForeignKey(change => change.BookingId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(change => change.FromStatusCode).HasMaxLength(ReferenceDataConfiguration<BookingStatus>.CodeLength).HasComment("Previous status; null when the booking was created.");
         builder.HasOne<BookingStatus>().WithMany().HasForeignKey(change => change.FromStatusCode).OnDelete(DeleteBehavior.Restrict);
         builder.Property(change => change.ToStatusCode).HasMaxLength(ReferenceDataConfiguration<BookingStatus>.CodeLength).IsRequired().HasComment("New status.");

@@ -1,8 +1,10 @@
+using EquipmentBooking.Domain.Approval;
+
 namespace EquipmentBooking.Application.Approval;
 
 internal sealed class NotSpecialisedCheck : IApprovalPolicyCheck
 {
-    public PolicyCheckKind Kind => PolicyCheckKind.NotSpecialised;
-
-    public bool IsSatisfied(ApprovalContext context) => !context.Item.IsSpecialised && !context.Category.IsSpecialised;
+    public PolicyCheckResult Evaluate(ApprovalContext context) => new(
+        ApprovalCheckTypeCodes.NotSpecialised,
+        !context.Item.IsSpecialised && !context.Category.IsSpecialised);
 }

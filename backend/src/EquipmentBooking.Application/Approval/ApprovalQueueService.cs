@@ -42,7 +42,7 @@ public sealed class ApprovalQueueService
     public async Task<PagedResult<ApprovalQueueItem>> GetQueueAsync(PageQuery page, CancellationToken cancellationToken)
     {
         var departmentId = _currentUser.DepartmentId;
-        return await QueueQuery(departmentId)
+        return await QueueQuery(departmentId, _currentUser.UserId)
             .OrderBy(booking => booking.CreatedAt)
             .ThenBy(booking => booking.Id)
             .Select(booking => new ApprovalQueueItem(
@@ -54,13 +54,17 @@ public sealed class ApprovalQueueService
                 booking.StartDate,
                 booking.EndDate,
                 booking.Purpose,
-                _db.ApprovalAssessments
-                    .Where(assessment => assessment.BookingId == booking.Id)
-                    .OrderByDescending(assessment => assessment.AssessedAt)
-                    .ThenByDescending(assessment => assessment.Id)
-                    .Take(1)
-                    .SelectMany(assessment => assessment.Reasons)
-                    .Join(_db.RoutingReasons, reason => reason.RoutingReasonCode, reason => reason.Code, (_, reason) => new RoutingReasonInfo(reason.Code, reason.Name))
+                _db.RoutingReasons
+                    .Where(reason => _db.AssessmentRoutingReasons.Any(derived =>
+                        derived.RoutingReasonCode == reason.Code
+                        && derived.AssessmentId == _db.ApprovalAssessments
+                            .Where(assessment => assessment.BookingId == booking.Id)
+                            .OrderByDescending(assessment => assessment.AssessedAt)
+                            .ThenByDescending(assessment => assessment.Id)
+                            .Select(assessment => assessment.Id)
+                            .FirstOrDefault()))
+                    .OrderBy(reason => reason.Code)
+                    .Select(reason => new RoutingReasonInfo(reason.Code, reason.Name))
                     .ToList(),
                 _db.ApprovalAssessments
                     .Where(assessment => assessment.BookingId == booking.Id)
@@ -77,7 +81,7 @@ public sealed class ApprovalQueueService
         await _validator.EnsureValidAsync(request, cancellationToken);
         var managerId = _currentUser.UserId;
         var departmentId = _currentUser.DepartmentId;
-        var isInQueue = await QueueQuery(departmentId).AnyAsync(booking => booking.Id == bookingId, cancellationToken);
+        var isInQueue = await QueueQuery(departmentId, null).AnyAsync(booking => booking.Id == bookingId, cancellationToken);
         if (!isInQueue)
         {
             throw new NotFoundException("Routed request", bookingId);
@@ -131,9 +135,14 @@ public sealed class ApprovalQueueService
             history?.LastLateReturnAt);
     }
 
-    private IQueryable<Booking> QueueQuery(long departmentId) =>
+    /// <summary>
+    /// Routed requests of the department. The queue of a manager leaves out the own requests, which only
+    /// other managers of the department may decide.
+    /// </summary>
+    private IQueryable<Booking> QueueQuery(long departmentId, long? excludedRequesterId) =>
         _db.Bookings.AsNoTracking().Where(booking =>
             booking.StatusCode == BookingStatusCodes.Requested
+            && booking.RequesterId != excludedRequesterId
             && _db.Users.Any(user => user.Id == booking.RequesterId && user.DepartmentId == departmentId)
             && _db.ApprovalAssessments
                 .Where(assessment => assessment.BookingId == booking.Id)

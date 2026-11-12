@@ -69,33 +69,18 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                         .HasColumnName("booking_id")
                         .HasComment("Assessed booking.");
 
-                    b.Property<bool>("CategoryAutoApprovalEnabled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("category_auto_approval_enabled")
-                        .HasComment("Automatic approval was switched on for the category.");
-
-                    b.Property<bool>("DurationCheckPassed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("duration_check_passed")
-                        .HasComment("The loan does not exceed the maximum duration of the category.");
-
                     b.Property<string>("ModelName")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("model_name")
                         .HasComment("Language model used for the purpose check.");
 
-                    b.Property<bool>("OrganisationAutoApprovalEnabled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("organisation_auto_approval_enabled")
-                        .HasComment("Automatic approval was switched on for the organisation.");
-
                     b.Property<string>("Outcome")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
                         .HasColumnName("outcome")
-                        .HasComment("pending, approved or routed to the manager.");
+                        .HasComment("Pending, approved automatically or routed to the manager.");
 
                     b.Property<string>("PromptVersion")
                         .HasMaxLength(20)
@@ -105,26 +90,16 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("PurposeResult")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
                         .HasColumnName("purpose_result")
                         .HasComment("Result of the purpose check by the language model.");
-
-                    b.Property<bool>("SpecialisedCheckPassed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("specialised_check_passed")
-                        .HasComment("Neither the item nor its category is specialised.");
 
                     b.Property<string>("Summary")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("summary")
                         .HasComment("Short summary for the manager prepared by the assistant.");
-
-                    b.Property<bool>("ValueCheckPassed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("value_check_passed")
-                        .HasComment("The item value is below the low value threshold.");
 
                     b.HasKey("Id")
                         .HasName("pk_approval_assessments");
@@ -135,40 +110,235 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                     b.HasIndex("BookingId")
                         .HasDatabaseName("ix_approval_assessments_booking_id");
 
+                    b.HasIndex("Outcome")
+                        .HasDatabaseName("ix_approval_assessments_outcome");
+
+                    b.HasIndex("PurposeResult")
+                        .HasDatabaseName("ix_approval_assessments_purpose_result");
+
                     b.ToTable("approval_assessments", "app", t =>
                         {
-                            t.HasComment("Decision log of the approval route: result of every policy check, the purpose check and the outcome.");
-
-                            t.HasCheckConstraint("ck_approval_assessments_approved_needs_match", "outcome <> 'approved' OR purpose_result = 'match'");
-
-                            t.HasCheckConstraint("ck_approval_assessments_outcome", "outcome IN ('pending', 'approved', 'routed')");
-
-                            t.HasCheckConstraint("ck_approval_assessments_purpose_result", "purpose_result IN ('pending', 'match', 'no_match', 'unavailable', 'not_run')");
+                            t.HasComment("Decision log of the approval route: the purpose check and the outcome; the results of the policy checks are in approval_checks.");
                         });
                 });
 
-            modelBuilder.Entity("EquipmentBooking.Domain.Approval.ApprovalAssessmentReason", b =>
+            modelBuilder.Entity("EquipmentBooking.Domain.Approval.ApprovalCheck", b =>
                 {
                     b.Property<long>("AssessmentId")
                         .HasColumnType("bigint")
                         .HasColumnName("assessment_id")
-                        .HasComment("Assessment.");
+                        .HasComment("Assessment the check belongs to.");
+
+                    b.Property<string>("CheckTypeCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("check_type_code")
+                        .HasComment("Policy check.");
+
+                    b.Property<decimal?>("LimitValue")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("limit_value")
+                        .HasComment("Limit in force at the time of the assessment, for example the low value threshold or the maximum loan days; null for switches and flags.");
+
+                    b.Property<decimal?>("ObservedValue")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("observed_value")
+                        .HasComment("Value of the request that was compared, for example the item value in EUR or the loan length in days; null for switches and flags.");
+
+                    b.Property<bool>("Passed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("passed")
+                        .HasComment("The check passed.");
+
+                    b.HasKey("AssessmentId", "CheckTypeCode")
+                        .HasName("pk_approval_checks");
+
+                    b.HasIndex("CheckTypeCode")
+                        .HasDatabaseName("ix_approval_checks_check_type_code");
+
+                    b.ToTable("approval_checks", "app", t =>
+                        {
+                            t.HasComment("Result of every policy check of an assessment with the values it compared.");
+
+                            t.HasCheckConstraint("ck_approval_checks_values", "(observed_value IS NULL) = (limit_value IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("EquipmentBooking.Domain.Approval.ApprovalCheckType", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("code")
+                        .HasComment("Stable code used by the application and constraints.");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name")
+                        .HasComment("Display name in English.");
 
                     b.Property<string>("RoutingReasonCode")
+                        .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)")
                         .HasColumnName("routing_reason_code")
-                        .HasComment("Reason for routing.");
+                        .HasComment("Routing reason when the check fails.");
 
-                    b.HasKey("AssessmentId", "RoutingReasonCode")
-                        .HasName("pk_approval_assessment_reasons");
+                    b.HasKey("Code")
+                        .HasName("pk_approval_check_types");
 
                     b.HasIndex("RoutingReasonCode")
-                        .HasDatabaseName("ix_approval_assessment_reasons_routing_reason_code");
+                        .IsUnique()
+                        .HasDatabaseName("ux_approval_check_types_routing_reason_code");
 
-                    b.ToTable("approval_assessment_reasons", "app", t =>
+                    b.ToTable("approval_check_types", "app", t =>
                         {
-                            t.HasComment("Many-to-many link between assessments and every reason why the request was routed.");
+                            t.HasComment("Fixed policy checks of the approval route and the routing reason recorded when a check fails.");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Code = "organisation_auto_approval",
+                            Name = "Automatic approval is switched on for the organisation",
+                            RoutingReasonCode = "org_auto_approval_off"
+                        },
+                        new
+                        {
+                            Code = "category_auto_approval",
+                            Name = "Automatic approval is switched on for the category",
+                            RoutingReasonCode = "category_auto_approval_off"
+                        },
+                        new
+                        {
+                            Code = "value_threshold",
+                            Name = "The item value is below the low value threshold",
+                            RoutingReasonCode = "high_value"
+                        },
+                        new
+                        {
+                            Code = "not_specialised",
+                            Name = "Neither the item nor its category is specialised",
+                            RoutingReasonCode = "specialised"
+                        },
+                        new
+                        {
+                            Code = "max_duration",
+                            Name = "The loan does not exceed the maximum duration of the category",
+                            RoutingReasonCode = "duration_exceeded"
+                        });
+                });
+
+            modelBuilder.Entity("EquipmentBooking.Domain.Approval.AssessmentOutcome", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("code")
+                        .HasComment("Stable code used by the application and constraints.");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name")
+                        .HasComment("Display name in English.");
+
+                    b.HasKey("Code")
+                        .HasName("pk_assessment_outcomes");
+
+                    b.ToTable("assessment_outcomes", "app", t =>
+                        {
+                            t.HasComment("Outcomes of the approval route for a request.");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Code = "pending",
+                            Name = "Waiting for the purpose check"
+                        },
+                        new
+                        {
+                            Code = "approved",
+                            Name = "Approved automatically"
+                        },
+                        new
+                        {
+                            Code = "routed",
+                            Name = "Routed to the department manager"
+                        });
+                });
+
+            modelBuilder.Entity("EquipmentBooking.Domain.Approval.AssessmentRoutingReason", b =>
+                {
+                    b.Property<long>("AssessmentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("assessment_id");
+
+                    b.Property<string>("RoutingReasonCode")
+                        .HasColumnType("text")
+                        .HasColumnName("routing_reason_code");
+
+                    b.HasKey("AssessmentId", "RoutingReasonCode");
+
+                    b.ToTable((string)null);
+
+                    b.ToView("v_assessment_routing_reasons", "app");
+                });
+
+            modelBuilder.Entity("EquipmentBooking.Domain.Approval.PurposeResult", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("code")
+                        .HasComment("Stable code used by the application and constraints.");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name")
+                        .HasComment("Display name in English.");
+
+                    b.HasKey("Code")
+                        .HasName("pk_purpose_results");
+
+                    b.ToTable("purpose_results", "app", t =>
+                        {
+                            t.HasComment("Results of the purpose check by the language model.");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Code = "pending",
+                            Name = "Not completed yet"
+                        },
+                        new
+                        {
+                            Code = "match",
+                            Name = "The purpose matches the usage guidelines"
+                        },
+                        new
+                        {
+                            Code = "no_match",
+                            Name = "The purpose does not match the usage guidelines"
+                        },
+                        new
+                        {
+                            Code = "unavailable",
+                            Name = "The assistant was not available"
+                        },
+                        new
+                        {
+                            Code = "not_run",
+                            Name = "Not run because a policy check failed"
                         });
                 });
 
@@ -254,6 +424,12 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                         .HasColumnName("anonymous_ref")
                         .HasComment("Random reference replacing the requester after the retention period.");
 
+                    b.Property<string>("CancellationReasonCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("cancellation_reason_code")
+                        .HasComment("Why the booking was cancelled; set exactly when the status is cancelled.");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -311,6 +487,9 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_bookings");
 
+                    b.HasIndex("CancellationReasonCode")
+                        .HasDatabaseName("ix_bookings_cancellation_reason_code");
+
                     b.HasIndex("RequesterId")
                         .HasDatabaseName("ix_bookings_requester_id");
 
@@ -322,11 +501,15 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
 
                     b.ToTable("bookings", "app", t =>
                         {
-                            t.HasComment("Requests for an item for a date range. A request blocks the item from creation until it is declined, cancelled or returned.");
+                            t.HasComment("Requests for an item for a date range. A request blocks the item from creation until it is declined, cancelled or returned; an overdue loan blocks the item until it is returned.");
 
                             t.HasCheckConstraint("ck_bookings_anonymised", "(requester_id IS NULL) = (anonymised_at IS NOT NULL)");
 
+                            t.HasCheckConstraint("ck_bookings_anonymised_returned", "anonymised_at IS NULL OR status_code = 'returned'");
+
                             t.HasCheckConstraint("ck_bookings_anonymous_ref", "anonymised_at IS NULL OR anonymous_ref IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_bookings_cancellation_reason", "(status_code = 'cancelled') = (cancellation_reason_code IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_bookings_dates", "end_date >= start_date");
 
@@ -374,10 +557,10 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Outcome")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
                         .HasColumnName("outcome")
-                        .HasComment("approved or declined; the assistant can only approve.");
+                        .HasComment("Approved or declined; the assistant can only approve.");
 
                     b.Property<DateTimeOffset?>("SupersededAt")
                         .HasColumnType("timestamp with time zone")
@@ -398,6 +581,9 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                     b.HasIndex("DecisionSourceCode")
                         .HasDatabaseName("ix_booking_decisions_decision_source_code");
 
+                    b.HasIndex("Outcome")
+                        .HasDatabaseName("ix_booking_decisions_outcome");
+
                     b.ToTable("booking_decisions", "app", t =>
                         {
                             t.HasComment("Decisions on requests. A date change supersedes the current decision, so a booking can have several.");
@@ -407,8 +593,6 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_booking_decisions_decline_comment", "outcome <> 'declined' OR comment IS NOT NULL");
 
                             t.HasCheckConstraint("ck_booking_decisions_manager_identified", "decision_source_code <> 'manager' OR decided_by_user_id IS NOT NULL");
-
-                            t.HasCheckConstraint("ck_booking_decisions_outcome", "outcome IN ('approved', 'declined')");
                         });
                 });
 
@@ -531,6 +715,161 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                     b.ToTable("booking_status_history", "app", t =>
                         {
                             t.HasComment("Every status change of a booking, written by trigger.");
+                        });
+                });
+
+            modelBuilder.Entity("EquipmentBooking.Domain.Bookings.BookingStatusTransition", b =>
+                {
+                    b.Property<string>("FromStatusCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("from_status_code")
+                        .HasComment("Current status.");
+
+                    b.Property<string>("ToStatusCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("to_status_code")
+                        .HasComment("Status the booking may change to.");
+
+                    b.HasKey("FromStatusCode", "ToStatusCode")
+                        .HasName("pk_booking_status_transitions");
+
+                    b.HasIndex("ToStatusCode")
+                        .HasDatabaseName("ix_booking_status_transitions_to_status_code");
+
+                    b.ToTable("booking_status_transitions", "app", t =>
+                        {
+                            t.HasComment("Allowed status changes of a booking, enforced by the trigger fn_check_booking_transition.");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            FromStatusCode = "requested",
+                            ToStatusCode = "approved"
+                        },
+                        new
+                        {
+                            FromStatusCode = "requested",
+                            ToStatusCode = "declined"
+                        },
+                        new
+                        {
+                            FromStatusCode = "requested",
+                            ToStatusCode = "cancelled"
+                        },
+                        new
+                        {
+                            FromStatusCode = "approved",
+                            ToStatusCode = "requested"
+                        },
+                        new
+                        {
+                            FromStatusCode = "approved",
+                            ToStatusCode = "issued"
+                        },
+                        new
+                        {
+                            FromStatusCode = "approved",
+                            ToStatusCode = "cancelled"
+                        },
+                        new
+                        {
+                            FromStatusCode = "issued",
+                            ToStatusCode = "overdue"
+                        },
+                        new
+                        {
+                            FromStatusCode = "issued",
+                            ToStatusCode = "returned"
+                        },
+                        new
+                        {
+                            FromStatusCode = "overdue",
+                            ToStatusCode = "returned"
+                        });
+                });
+
+            modelBuilder.Entity("EquipmentBooking.Domain.Bookings.CancellationReason", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("code")
+                        .HasComment("Stable code used by the application and constraints.");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name")
+                        .HasComment("Display name in English.");
+
+                    b.HasKey("Code")
+                        .HasName("pk_cancellation_reasons");
+
+                    b.ToTable("cancellation_reasons", "app", t =>
+                        {
+                            t.HasComment("Reasons why a booking was cancelled; every cancelled booking has one.");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Code = "by_requester",
+                            Name = "Cancelled by the requester"
+                        },
+                        new
+                        {
+                            Code = "maintenance",
+                            Name = "Cancelled because the item is out of service for maintenance"
+                        },
+                        new
+                        {
+                            Code = "request_expired",
+                            Name = "No decision was made by the start date"
+                        },
+                        new
+                        {
+                            Code = "not_collected",
+                            Name = "The item was not collected by the end date"
+                        });
+                });
+
+            modelBuilder.Entity("EquipmentBooking.Domain.Bookings.DecisionOutcome", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("code")
+                        .HasComment("Stable code used by the application and constraints.");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name")
+                        .HasComment("Display name in English.");
+
+                    b.HasKey("Code")
+                        .HasName("pk_decision_outcomes");
+
+                    b.ToTable("decision_outcomes", "app", t =>
+                        {
+                            t.HasComment("Outcomes of a decision on a request.");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Code = "approved",
+                            Name = "Approved"
+                        },
+                        new
+                        {
+                            Code = "declined",
+                            Name = "Declined"
                         });
                 });
 
@@ -831,14 +1170,7 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("RetiredAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("retired_at")
-                        .HasComment("When the item was retired; set together with the status retired.");
-
-                    b.Property<string>("StatusCode")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("status_code")
-                        .HasComment("Stored status: available or retired.");
+                        .HasComment("When the item was retired; null while the item is in use. The effective status is derived from this column and active maintenance.");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAddOrUpdate()
@@ -875,14 +1207,9 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                     b.HasIndex("LocationId")
                         .HasDatabaseName("ix_equipment_items_location_id");
 
-                    b.HasIndex("StatusCode")
-                        .HasDatabaseName("ix_equipment_items_status_code");
-
                     b.ToTable("equipment_items", "app", t =>
                         {
                             t.HasComment("Physical items of shared equipment.");
-
-                            t.HasCheckConstraint("ck_equipment_items_retired", "(status_code = 'retired') = (retired_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_equipment_items_value", "value >= 0");
                         });
@@ -970,42 +1297,6 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                             Code = "damaged",
                             Name = "Damaged",
                             SortOrder = 4
-                        });
-                });
-
-            modelBuilder.Entity("EquipmentBooking.Domain.Catalogue.ItemStatus", b =>
-                {
-                    b.Property<string>("Code")
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("code")
-                        .HasComment("Stable code used by the application and constraints.");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("name")
-                        .HasComment("Display name in English.");
-
-                    b.HasKey("Code")
-                        .HasName("pk_item_statuses");
-
-                    b.ToTable("item_statuses", "app", t =>
-                        {
-                            t.HasComment("Stored statuses of equipment items. Out of service is derived from active maintenance records.");
-                        });
-
-                    b.HasData(
-                        new
-                        {
-                            Code = "available",
-                            Name = "Available"
-                        },
-                        new
-                        {
-                            Code = "retired",
-                            Name = "Retired"
                         });
                 });
 
@@ -1161,6 +1452,52 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("EquipmentBooking.Domain.Notifications.EmailStatus", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("code")
+                        .HasComment("Stable code used by the application and constraints.");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name")
+                        .HasComment("Display name in English.");
+
+                    b.HasKey("Code")
+                        .HasName("pk_email_statuses");
+
+                    b.ToTable("email_statuses", "app", t =>
+                        {
+                            t.HasComment("Delivery states of the e-mail copy of a notification.");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Code = "pending",
+                            Name = "Waiting for delivery"
+                        },
+                        new
+                        {
+                            Code = "sent",
+                            Name = "Sent"
+                        },
+                        new
+                        {
+                            Code = "failed",
+                            Name = "Delivery failed"
+                        },
+                        new
+                        {
+                            Code = "not_required",
+                            Name = "No e-mail copy is sent"
+                        });
+                });
+
             modelBuilder.Entity("EquipmentBooking.Domain.Notifications.Notification", b =>
                 {
                     b.Property<long>("Id")
@@ -1202,8 +1539,8 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("EmailStatus")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
                         .HasColumnName("email_status")
                         .HasComment("Delivery state of the e-mail copy; not_required while no provider is configured.");
 
@@ -1241,6 +1578,9 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_notifications_email_pending")
                         .HasFilter("email_status = 'pending'");
 
+                    b.HasIndex("EmailStatus")
+                        .HasDatabaseName("ix_notifications_email_status");
+
                     b.HasIndex("NotificationTypeCode")
                         .HasDatabaseName("ix_notifications_notification_type_code");
 
@@ -1253,8 +1593,6 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                             t.HasComment("In-app notifications; the e-mail columns form an outbox for a future e-mail provider.");
 
                             t.HasCheckConstraint("ck_notifications_email_attempts", "email_attempts >= 0");
-
-                            t.HasCheckConstraint("ck_notifications_email_status", "email_status IN ('pending', 'sent', 'failed', 'not_required')");
                         });
                 });
 
@@ -1392,6 +1730,71 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                             RetentionDays = 365,
                             ReturnTime = new TimeOnly(18, 0, 0),
                             TimeZone = "Europe/Vilnius"
+                        });
+                });
+
+            modelBuilder.Entity("EquipmentBooking.Domain.Settings.OrganisationSettingsChange", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id")
+                        .HasComment("Surrogate key.");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("AutoApprovalEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("auto_approval_enabled")
+                        .HasComment("Organisation wide switch for automatic approval.");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at")
+                        .HasDefaultValueSql("now()")
+                        .HasComment("When this version came into force.");
+
+                    b.Property<long?>("ChangedByUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("changed_by_user_id")
+                        .HasComment("Administrator who made the change; null for the initial settings and after a user was removed.");
+
+                    b.Property<decimal>("LowValueThreshold")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("low_value_threshold")
+                        .HasComment("Low value threshold in EUR.");
+
+                    b.Property<int>("RetentionDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("retention_days")
+                        .HasComment("Retention period of personal data of loans in days.");
+
+                    b.Property<TimeOnly>("ReturnTime")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("return_time")
+                        .HasComment("Local return time on the end date.");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("time_zone")
+                        .HasComment("IANA time zone of the organisation.");
+
+                    b.HasKey("Id")
+                        .HasName("pk_organisation_settings_history");
+
+                    b.HasIndex("ChangedAt")
+                        .HasDatabaseName("ix_organisation_settings_history_changed_at");
+
+                    b.HasIndex("ChangedByUserId")
+                        .HasDatabaseName("ix_organisation_settings_history_changed_by_user_id");
+
+                    b.ToTable("organisation_settings_history", "app", t =>
+                        {
+                            t.HasComment("Every version of the organisation settings, written by trigger.");
                         });
                 });
 
@@ -1660,30 +2063,60 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                     b.HasOne("EquipmentBooking.Domain.Bookings.Booking", null)
                         .WithMany()
                         .HasForeignKey("BookingId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_approval_assessments_bookings_booking_id");
+
+                    b.HasOne("EquipmentBooking.Domain.Approval.AssessmentOutcome", null)
+                        .WithMany()
+                        .HasForeignKey("Outcome")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_approval_assessments_assessment_outcomes_outcome");
+
+                    b.HasOne("EquipmentBooking.Domain.Approval.PurposeResult", null)
+                        .WithMany()
+                        .HasForeignKey("PurposeResult")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_approval_assessments_purpose_results_purpose_result");
                 });
 
-            modelBuilder.Entity("EquipmentBooking.Domain.Approval.ApprovalAssessmentReason", b =>
+            modelBuilder.Entity("EquipmentBooking.Domain.Approval.ApprovalCheck", b =>
                 {
                     b.HasOne("EquipmentBooking.Domain.Approval.ApprovalAssessment", null)
-                        .WithMany("Reasons")
+                        .WithMany("Checks")
                         .HasForeignKey("AssessmentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_approval_assessment_reasons_approval_assessments_assessment");
+                        .HasConstraintName("fk_approval_checks_approval_assessments_assessment_id");
 
+                    b.HasOne("EquipmentBooking.Domain.Approval.ApprovalCheckType", null)
+                        .WithMany()
+                        .HasForeignKey("CheckTypeCode")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_approval_checks_approval_check_types_check_type_code");
+                });
+
+            modelBuilder.Entity("EquipmentBooking.Domain.Approval.ApprovalCheckType", b =>
+                {
                     b.HasOne("EquipmentBooking.Domain.Approval.RoutingReason", null)
                         .WithMany()
                         .HasForeignKey("RoutingReasonCode")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_approval_assessment_reasons_routing_reasons_routing_reason_");
+                        .HasConstraintName("fk_approval_check_types_routing_reasons_routing_reason_code");
                 });
 
             modelBuilder.Entity("EquipmentBooking.Domain.Bookings.Booking", b =>
                 {
+                    b.HasOne("EquipmentBooking.Domain.Bookings.CancellationReason", null)
+                        .WithMany()
+                        .HasForeignKey("CancellationReasonCode")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_bookings_cancellation_reasons_cancellation_reason_code");
+
                     b.HasOne("EquipmentBooking.Domain.Catalogue.EquipmentItem", "EquipmentItem")
                         .WithMany()
                         .HasForeignKey("EquipmentItemId")
@@ -1712,7 +2145,7 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                     b.HasOne("EquipmentBooking.Domain.Bookings.Booking", null)
                         .WithMany("Decisions")
                         .HasForeignKey("BookingId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_booking_decisions_bookings_booking_id");
 
@@ -1728,6 +2161,13 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_booking_decisions_decision_sources_decision_source_code");
+
+                    b.HasOne("EquipmentBooking.Domain.Bookings.DecisionOutcome", null)
+                        .WithMany()
+                        .HasForeignKey("Outcome")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_booking_decisions_decision_outcomes_outcome");
                 });
 
             modelBuilder.Entity("EquipmentBooking.Domain.Bookings.BookingStatusChange", b =>
@@ -1735,7 +2175,7 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                     b.HasOne("EquipmentBooking.Domain.Bookings.Booking", null)
                         .WithMany()
                         .HasForeignKey("BookingId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_booking_status_history_bookings_booking_id");
 
@@ -1759,12 +2199,29 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_booking_status_history_booking_statuses_to_status_code");
                 });
 
+            modelBuilder.Entity("EquipmentBooking.Domain.Bookings.BookingStatusTransition", b =>
+                {
+                    b.HasOne("EquipmentBooking.Domain.Bookings.BookingStatus", null)
+                        .WithMany()
+                        .HasForeignKey("FromStatusCode")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_booking_status_transitions_booking_statuses_from_status_code");
+
+                    b.HasOne("EquipmentBooking.Domain.Bookings.BookingStatus", null)
+                        .WithMany()
+                        .HasForeignKey("ToStatusCode")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_booking_status_transitions_booking_statuses_to_status_code");
+                });
+
             modelBuilder.Entity("EquipmentBooking.Domain.Bookings.Loan", b =>
                 {
                     b.HasOne("EquipmentBooking.Domain.Bookings.Booking", null)
                         .WithOne("Loan")
                         .HasForeignKey("EquipmentBooking.Domain.Bookings.Loan", "BookingId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_loans_bookings_booking_id");
 
@@ -1799,7 +2256,7 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                     b.HasOne("EquipmentBooking.Domain.Catalogue.EquipmentItem", null)
                         .WithMany()
                         .HasForeignKey("EquipmentItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_equipment_condition_changes_equipment_items_equipment_item_");
 
@@ -1840,13 +2297,6 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_equipment_items_locations_location_id");
 
-                    b.HasOne("EquipmentBooking.Domain.Catalogue.ItemStatus", null)
-                        .WithMany()
-                        .HasForeignKey("StatusCode")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_equipment_items_item_statuses_status_code");
-
                     b.Navigation("Category");
 
                     b.Navigation("Location");
@@ -1884,6 +2334,13 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .HasConstraintName("fk_notifications_bookings_booking_id");
 
+                    b.HasOne("EquipmentBooking.Domain.Notifications.EmailStatus", null)
+                        .WithMany()
+                        .HasForeignKey("EmailStatus")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_notifications_email_statuses_email_status");
+
                     b.HasOne("EquipmentBooking.Domain.Notifications.NotificationType", null)
                         .WithMany()
                         .HasForeignKey("NotificationTypeCode")
@@ -1906,6 +2363,15 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UpdatedByUserId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_organisation_settings_users_updated_by_user_id");
+                });
+
+            modelBuilder.Entity("EquipmentBooking.Domain.Settings.OrganisationSettingsChange", b =>
+                {
+                    b.HasOne("EquipmentBooking.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ChangedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_organisation_settings_history_users_changed_by_user_id");
                 });
 
             modelBuilder.Entity("EquipmentBooking.Domain.Users.RefreshToken", b =>
@@ -1966,7 +2432,7 @@ namespace EquipmentBooking.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("EquipmentBooking.Domain.Approval.ApprovalAssessment", b =>
                 {
-                    b.Navigation("Reasons");
+                    b.Navigation("Checks");
                 });
 
             modelBuilder.Entity("EquipmentBooking.Domain.Bookings.Booking", b =>

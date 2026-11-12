@@ -4,6 +4,7 @@ using EquipmentBooking.Application.Common.ReadModels;
 using EquipmentBooking.Domain.Approval;
 using EquipmentBooking.Domain.Bookings;
 using EquipmentBooking.Domain.Catalogue;
+using EquipmentBooking.Domain.Common;
 using EquipmentBooking.Domain.Maintenance;
 using EquipmentBooking.Domain.Notifications;
 using EquipmentBooking.Domain.Settings;
@@ -18,8 +19,17 @@ public sealed class AppDbContext : DbContext, IAppDbContext
 {
     public const string Schema = "app";
 
-    /// <summary>SQLSTATE raised by the maintenance overlap trigger.</summary>
+    /// <summary>SQLSTATE raised when a blocking booking and an out of service maintenance period overlap.</summary>
     public const string MaintenanceOverlapSqlState = "EB001";
+
+    /// <summary>SQLSTATE raised for a booking status change that is not in booking_status_transitions.</summary>
+    public const string InvalidTransitionSqlState = "EB002";
+
+    /// <summary>SQLSTATE raised for a new booking of an item that has an overdue loan.</summary>
+    public const string ItemOverdueSqlState = "EB003";
+
+    /// <summary>SQLSTATE raised when a user without the required role, or the requester, records a decision, loan or maintenance.</summary>
+    public const string ActorNotAllowedSqlState = "EB004";
 
     private const string BookingOverlapConstraint = "ex_bookings_no_overlap";
     private const string InventoryNumberIndex = "ux_equipment_items_inventory_number";
@@ -60,6 +70,12 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<ApprovalAssessment> ApprovalAssessments => Set<ApprovalAssessment>();
 
     public DbSet<RoutingReason> RoutingReasons => Set<RoutingReason>();
+
+    public DbSet<ApprovalCheckType> ApprovalCheckTypes => Set<ApprovalCheckType>();
+
+    public DbSet<AssessmentRoutingReason> AssessmentRoutingReasons => Set<AssessmentRoutingReason>();
+
+    public DbSet<CancellationReason> CancellationReasons => Set<CancellationReason>();
 
     public DbSet<MaintenanceRecord> MaintenanceRecords => Set<MaintenanceRecord>();
 
@@ -149,6 +165,12 @@ public sealed class AppDbContext : DbContext, IAppDbContext
                 new ConflictException(ErrorCodes.BookingOverlap, "The item is already booked for some of the selected dates."),
             { SqlState: MaintenanceOverlapSqlState } =>
                 new ConflictException(ErrorCodes.ItemUnderMaintenance, "The item is out of service for maintenance on some of the selected dates."),
+            { SqlState: InvalidTransitionSqlState } =>
+                new ConflictException(DomainErrorCodes.InvalidTransition, "The status change is not allowed."),
+            { SqlState: ItemOverdueSqlState } =>
+                new BusinessRuleException(ErrorCodes.ItemOverdue, "The item has not been returned from an overdue loan yet."),
+            { SqlState: ActorNotAllowedSqlState } =>
+                new ForbiddenException("The user is not allowed to record this action."),
             { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: InventoryNumberIndex } =>
                 new ConflictException(ErrorCodes.DuplicateInventoryNumber, "An item with this inventory number already exists."),
             { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: UserEmailIndex } =>

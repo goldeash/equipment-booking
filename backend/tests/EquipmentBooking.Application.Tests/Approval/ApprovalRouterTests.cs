@@ -79,7 +79,8 @@ public sealed class ApprovalRouterTests
         var assessment = await _router.RouteAsync(booking, context.Item, context.Category, context.Settings, TestContext.Current.CancellationToken);
 
         assessment.Outcome.ShouldBe(AssessmentOutcomes.Routed);
-        assessment.Reasons.Single().RoutingReasonCode.ShouldBe(RoutingReasonCodes.AssistantUnavailable);
+        assessment.PurposeResult.ShouldBe(PurposeResults.Unavailable);
+        assessment.Checks.ShouldAllBe(check => check.Passed);
         booking.StatusCode.ShouldBe(BookingStatusCodes.Requested);
         booking.Decisions.ShouldBeEmpty();
     }

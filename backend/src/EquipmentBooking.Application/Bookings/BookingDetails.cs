@@ -9,6 +9,7 @@ public sealed record BookingDetails(
     DateOnly EndDate,
     string Purpose,
     string Status,
+    CancellationInfo? Cancellation,
     DecisionInfo? Decision,
     LoanInfo? Loan,
     RoutingInfo? Routing,
