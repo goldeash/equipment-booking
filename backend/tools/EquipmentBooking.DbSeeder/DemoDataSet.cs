@@ -3,6 +3,8 @@ namespace EquipmentBooking.DbSeeder;
 /// <summary>Complete generated demo data set.</summary>
 internal sealed class DemoDataSet
 {
+    public required string TimeZoneId { get; init; }
+
     public List<DepartmentRow> Departments { get; } = [];
 
     public List<LocationRow> Locations { get; } = [];

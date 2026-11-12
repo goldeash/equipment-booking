@@ -22,9 +22,12 @@ internal sealed class DemoDataGenerator
     private const int RandomSeed = 20261110;
     private const int HistoryDays = 180;
     private const int FutureDays = 40;
-    private const decimal LowValueThreshold = 500m;
+    /// <summary>Organisation settings of the demo organisation; the generated assessments and due times use them.</summary>
+    public const decimal LowValueThreshold = 500m;
 
-    private static readonly TimeOnly ReturnTime = new(18, 0);
+    public const int RetentionDays = 365;
+
+    public static readonly TimeOnly ReturnTime = new(18, 0);
 
     private static readonly string[] Purposes =
     [
@@ -67,7 +70,7 @@ internal sealed class DemoDataGenerator
     private readonly TimeZoneInfo _zone;
     private readonly Randomizer _random;
     private readonly Faker _faker;
-    private readonly DemoDataSet _data = new();
+    private readonly DemoDataSet _data;
     private long _nextBookingId = 1;
     private long _nextDecisionId = 1;
     private long _nextAssessmentId = 1;
@@ -76,6 +79,7 @@ internal sealed class DemoDataGenerator
     public DemoDataGenerator(DateTimeOffset now, string timeZoneId)
     {
         _zone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+        _data = new DemoDataSet { TimeZoneId = timeZoneId };
         _now = now;
         _today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _zone).DateTime);
         _random = new Randomizer(RandomSeed);
@@ -179,7 +183,9 @@ internal sealed class DemoDataGenerator
         {
             if (currentRepair && day >= _today.AddDays(-3))
             {
-                AddMaintenance(item, MaintenanceTypeCodes.Repair, _today.AddDays(-1), null, "Device does not start; sent to the service partner.");
+                // The repair starts yesterday or, when the previous loan is still running, on the first free day.
+                var repairStart = day > _today.AddDays(-1) ? day : _today.AddDays(-1);
+                AddMaintenance(item, MaintenanceTypeCodes.Repair, repairStart, null, "Device does not start; sent to the service partner.");
                 return;
             }
 
@@ -192,7 +198,9 @@ internal sealed class DemoDataGenerator
                 continue;
             }
 
-            var duration = _random.Int(1, Math.Min(item.Category.Spec.MaxLoanDays, 7));
+            // A few loans are longer than the category allows; a manager approved them after routing.
+            var maxLoanDays = item.Category.Spec.MaxLoanDays;
+            var duration = _random.Bool(0.04f) ? maxLoanDays + _random.Int(1, 3) : _random.Int(1, Math.Min(maxLoanDays, 7));
             var startDate = day;
             var endDate = day.AddDays(duration - 1);
             var next = AddBooking(item, startDate, endDate, holdsOverdue);
@@ -253,6 +261,7 @@ internal sealed class DemoDataGenerator
         if (endDate < _today && _random.Bool(0.07f))
         {
             Change(booking, BookingStatusCodes.Cancelled, decidedAt.AddHours(_random.Int(1, 20)), requester.Id);
+            booking.CancellationReason = CancellationReasonCodes.ByRequester;
             return endDate;
         }
 
@@ -319,35 +328,24 @@ internal sealed class DemoDataGenerator
         return repairEnd;
     }
 
+    /// <summary>
+    /// Records the approval route as the system runs it without the AI assistant: every policy check with the
+    /// compared values, and a request that passes all checks is routed because the assistant is unavailable.
+    /// </summary>
     private void AddAssessment(BookingRow booking, DateTimeOffset assessedAt)
     {
         var category = booking.Item.Category.Spec;
-        var valuePassed = booking.Item.Value < LowValueThreshold;
-        var specialisedPassed = !category.IsSpecialised;
-        var durationPassed = booking.EndDate.DayNumber - booking.StartDate.DayNumber + 1 <= category.MaxLoanDays;
-        var reasons = new List<string>();
-        if (!valuePassed)
-        {
-            reasons.Add(RoutingReasonCodes.HighValue);
-        }
-
-        if (!specialisedPassed)
-        {
-            reasons.Add(RoutingReasonCodes.Specialised);
-        }
-
-        if (!durationPassed)
-        {
-            reasons.Add(RoutingReasonCodes.DurationExceeded);
-        }
-
-        var purposeResult = reasons.Count > 0 ? PurposeResults.NotRun : PurposeResults.Unavailable;
-        if (reasons.Count == 0)
-        {
-            reasons.Add(RoutingReasonCodes.AssistantUnavailable);
-        }
-
-        _data.Assessments.Add(new AssessmentRow(_nextAssessmentId++, booking.Id, assessedAt, valuePassed, specialisedPassed, durationPassed, purposeResult, reasons));
+        var days = booking.EndDate.DayNumber - booking.StartDate.DayNumber + 1;
+        CheckRow[] checks =
+        [
+            new(ApprovalCheckTypeCodes.OrganisationAutoApproval, true, null, null),
+            new(ApprovalCheckTypeCodes.CategoryAutoApproval, category.AutoApprovalEnabled, null, null),
+            new(ApprovalCheckTypeCodes.ValueThreshold, booking.Item.Value < LowValueThreshold, booking.Item.Value, LowValueThreshold),
+            new(ApprovalCheckTypeCodes.NotSpecialised, !category.IsSpecialised, null, null),
+            new(ApprovalCheckTypeCodes.MaxDuration, days <= category.MaxLoanDays, days, category.MaxLoanDays),
+        ];
+        var purposeResult = checks.All(check => check.Passed) ? PurposeResults.Unavailable : PurposeResults.NotRun;
+        _data.Assessments.Add(new AssessmentRow(_nextAssessmentId++, booking.Id, assessedAt, checks, purposeResult, AssessmentOutcomes.Routed));
     }
 
     private void Decide(BookingRow booking, UserRow manager, string outcome, string? comment, DateTimeOffset decidedAt)

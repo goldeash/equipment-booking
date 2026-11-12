@@ -4,27 +4,34 @@ using System.Text;
 namespace EquipmentBooking.DbSeeder;
 
 /// <summary>
-/// Turns a demo data set into one SQL script. History triggers are disabled during the load so
-/// that the historical timestamps of the generated status and condition changes are kept.
-/// Password hashes are never part of the script.
+/// Turns a demo data set into one SQL script that replaces all application data in one transaction and
+/// sets the organisation settings to the values the data were generated with. The history and transition
+/// triggers are disabled during the load so that the generated statuses and historical timestamps are kept;
+/// every other constraint and trigger validates the data. Password hashes are never part of the script.
 /// </summary>
 internal static class SqlScriptBuilder
 {
     private const string TruncateStatement =
-        "TRUNCATE app.notifications, app.approval_assessment_reasons, app.approval_assessments, app.booking_status_history, "
+        "TRUNCATE app.notifications, app.approval_checks, app.approval_assessments, app.booking_status_history, "
         + "app.loans, app.booking_decisions, app.bookings, app.maintenance_records, app.equipment_condition_changes, "
         + "app.equipment_item_features, app.equipment_items, app.features, app.categories, app.locations, app.refresh_tokens, "
-        + "app.users, app.departments RESTART IDENTITY CASCADE;";
+        + "app.organisation_settings_history, app.organisation_settings, app.users, app.departments RESTART IDENTITY;";
 
-    // TRUNCATE ... CASCADE also empties organisation_settings, which references users.
-    private const string RestoreSettingsStatement =
-        "INSERT INTO app.organisation_settings (id, low_value_threshold, auto_approval_enabled, retention_days, time_zone, return_time) "
-        + "VALUES (1, 500.00, true, 365, 'Europe/Vilnius', '18:00') ON CONFLICT (id) DO NOTHING;";
+    // Triggers that would rewrite the loaded history: the history triggers would stamp the load time, and the
+    // transition trigger only accepts new bookings as requested, while the script inserts their final status.
+    // Consistency, overlap, maintenance and role checks stay active and validate the generated data.
+    private static readonly (string Table, string Trigger)[] HistoryTriggers =
+    [
+        ("bookings", "trg_bookings_status_history"),
+        ("bookings", "trg_bookings_transition"),
+        ("equipment_items", "trg_equipment_items_condition_history"),
+    ];
 
     private static readonly string[] IdentityTables =
     [
         "departments", "locations", "features", "categories", "users", "equipment_items", "bookings", "booking_decisions",
         "approval_assessments", "maintenance_records", "booking_status_history", "equipment_condition_changes", "notifications",
+        "organisation_settings_history",
     ];
 
     public static string Build(DemoDataSet data, DateTimeOffset generatedAt)
@@ -35,9 +42,16 @@ internal static class SqlScriptBuilder
         sql.AppendLine("-- Run as the schema owner after the migrations. Existing application data is replaced.");
         sql.AppendLine("BEGIN;");
         sql.AppendLine(TruncateStatement);
-        sql.AppendLine(RestoreSettingsStatement);
-        sql.AppendLine("ALTER TABLE app.bookings DISABLE TRIGGER trg_bookings_status_history;");
-        sql.AppendLine("ALTER TABLE app.equipment_items DISABLE TRIGGER trg_equipment_items_condition_history;");
+        Insert(
+            sql,
+            "organisation_settings",
+            ["id", "low_value_threshold", "auto_approval_enabled", "retention_days", "time_zone", "return_time"],
+            [Values((short)1, DemoDataGenerator.LowValueThreshold, true, DemoDataGenerator.RetentionDays, data.TimeZoneId, DemoDataGenerator.ReturnTime)],
+            overridingIdentity: false);
+        foreach (var (table, trigger) in HistoryTriggers)
+        {
+            sql.AppendLine(CultureInfo.InvariantCulture, $"ALTER TABLE app.{table} DISABLE TRIGGER {trigger};");
+        }
 
         Insert(sql, "departments", ["id", "name"], data.Departments.Select(row => Values(row.Id, row.Name)));
         Insert(sql, "locations", ["id", "name"], data.Locations.Select(row => Values(row.Id, row.Name)));
@@ -46,7 +60,7 @@ internal static class SqlScriptBuilder
             sql,
             "categories",
             ["id", "name", "description", "max_loan_days", "usage_guidelines", "is_specialised", "auto_approval_enabled"],
-            data.Categories.Select(row => Values(row.Id, row.Spec.Name, row.Spec.Description, row.Spec.MaxLoanDays, row.Spec.UsageGuidelines, row.Spec.IsSpecialised, true)));
+            data.Categories.Select(row => Values(row.Id, row.Spec.Name, row.Spec.Description, row.Spec.MaxLoanDays, row.Spec.UsageGuidelines, row.Spec.IsSpecialised, row.Spec.AutoApprovalEnabled)));
         Insert(
             sql,
             "users",
@@ -55,8 +69,8 @@ internal static class SqlScriptBuilder
         Insert(
             sql,
             "equipment_items",
-            ["id", "inventory_number", "name", "description", "category_id", "location_id", "value", "condition_code", "status_code", "is_specialised", "created_at", "updated_at"],
-            data.Items.Select(row => Values(row.Id, row.InventoryNumber, row.Name, row.Description, row.Category.Id, row.LocationId, row.Value, row.Condition, "available", false, row.CreatedAt, row.CreatedAt)));
+            ["id", "inventory_number", "name", "description", "category_id", "location_id", "value", "condition_code", "is_specialised", "created_at", "updated_at"],
+            data.Items.Select(row => Values(row.Id, row.InventoryNumber, row.Name, row.Description, row.Category.Id, row.LocationId, row.Value, row.Condition, false, row.CreatedAt, row.CreatedAt)));
         Insert(
             sql,
             "equipment_item_features",
@@ -71,8 +85,8 @@ internal static class SqlScriptBuilder
         Insert(
             sql,
             "bookings",
-            ["id", "equipment_item_id", "requester_id", "start_date", "end_date", "purpose", "status_code", "created_at", "updated_at"],
-            data.Bookings.Select(row => Values(row.Id, row.Item.Id, row.Requester.Id, row.StartDate, row.EndDate, row.Purpose, row.Status, row.CreatedAt, row.CreatedAt)));
+            ["id", "equipment_item_id", "requester_id", "start_date", "end_date", "purpose", "status_code", "cancellation_reason_code", "created_at", "updated_at"],
+            data.Bookings.Select(row => Values(row.Id, row.Item.Id, row.Requester.Id, row.StartDate, row.EndDate, row.Purpose, row.Status, row.CancellationReason, row.CreatedAt, row.CreatedAt)));
         Insert(
             sql,
             "booking_decisions",
@@ -87,13 +101,13 @@ internal static class SqlScriptBuilder
         Insert(
             sql,
             "approval_assessments",
-            ["id", "booking_id", "assessed_at", "value_check_passed", "specialised_check_passed", "duration_check_passed", "organisation_auto_approval_enabled", "category_auto_approval_enabled", "purpose_result", "outcome"],
-            data.Assessments.Select(row => Values(row.Id, row.BookingId, row.AssessedAt, row.ValuePassed, row.SpecialisedPassed, row.DurationPassed, true, true, row.PurposeResult, "routed")));
+            ["id", "booking_id", "assessed_at", "purpose_result", "outcome"],
+            data.Assessments.Select(row => Values(row.Id, row.BookingId, row.AssessedAt, row.PurposeResult, row.Outcome)));
         Insert(
             sql,
-            "approval_assessment_reasons",
-            ["assessment_id", "routing_reason_code"],
-            data.Assessments.SelectMany(row => row.Reasons.Select(reason => Values(row.Id, reason))),
+            "approval_checks",
+            ["assessment_id", "check_type_code", "passed", "observed_value", "limit_value"],
+            data.Assessments.SelectMany(row => row.Checks.Select(check => Values(row.Id, check.CheckTypeCode, check.Passed, check.ObservedValue, check.LimitValue))),
             overridingIdentity: false);
         Insert(
             sql,
@@ -114,8 +128,12 @@ internal static class SqlScriptBuilder
             data.Notifications.Select(row => Values(row.UserId, row.Type, row.BookingId, row.Title, row.Body, row.CreatedAt, row.ReadAt, "not_required")),
             overridingIdentity: false);
 
-        sql.AppendLine("ALTER TABLE app.bookings ENABLE TRIGGER trg_bookings_status_history;");
-        sql.AppendLine("ALTER TABLE app.equipment_items ENABLE TRIGGER trg_equipment_items_condition_history;");
+        // Runs the deferred consistency checks now; a table with pending trigger events cannot be altered.
+        sql.AppendLine("SET CONSTRAINTS ALL IMMEDIATE;");
+        foreach (var (table, trigger) in HistoryTriggers)
+        {
+            sql.AppendLine(CultureInfo.InvariantCulture, $"ALTER TABLE app.{table} ENABLE TRIGGER {trigger};");
+        }
         foreach (var table in IdentityTables)
         {
             sql.AppendLine(CultureInfo.InvariantCulture, $"SELECT setval(pg_get_serial_sequence('app.{table}', 'id'), coalesce((SELECT max(id) FROM app.{table}), 0) + 1, false);");
@@ -151,6 +169,7 @@ internal static class SqlScriptBuilder
         int or long or short => Convert.ToString(value, CultureInfo.InvariantCulture)!,
         decimal number => number.ToString("0.00", CultureInfo.InvariantCulture),
         DateOnly date => $"'{date:yyyy-MM-dd}'",
+        TimeOnly time => $"'{time.ToString("HH:mm", CultureInfo.InvariantCulture)}'",
         DateTimeOffset instant => $"'{instant.ToUniversalTime():yyyy-MM-dd HH:mm:ss}+00'",
         string text => $"'{text.Replace("'", "''", StringComparison.Ordinal)}'",
         _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unsupported literal type."),

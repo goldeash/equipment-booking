@@ -7,4 +7,5 @@ internal sealed record CategorySpec(
     string UsageGuidelines,
     bool IsSpecialised,
     ModelSpec[] Models,
-    int ItemCount);
+    int ItemCount,
+    bool AutoApprovalEnabled = true);

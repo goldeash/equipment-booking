@@ -97,7 +97,7 @@ internal static class DemoCatalogue
                 new("Google Pixel 8", 699m, ["Touchscreen", "USB-C", "GPS"]),
                 new("Apple iPhone 14", 799m, ["Touchscreen", "GPS", "Waterproof"]),
                 new("Samsung Galaxy A54", 449m, ["Touchscreen", "USB-C", "GPS"]),
-            ], 12),
+            ], 12, AutoApprovalEnabled: false),
         new("Drones", "Camera drones for site inspections.", 3,
             "Site inspections and aerial photos by certified pilots in permitted areas only.", true,
             [

@@ -16,5 +16,7 @@ internal sealed class BookingRow
 
     public required string Status { get; set; }
 
+    public string? CancellationReason { get; set; }
+
     public required DateTimeOffset CreatedAt { get; init; }
 }
