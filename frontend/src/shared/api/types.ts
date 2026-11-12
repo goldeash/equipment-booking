@@ -84,7 +84,7 @@ export interface EquipmentDetails {
 export interface BookedPeriod {
   startDate: string
   endDate: string | null
-  kind: 'booking' | 'maintenance'
+  kind: 'booking' | 'maintenance' | 'overdue'
 }
 
 export interface EquipmentHistoryEvent {
@@ -145,6 +145,11 @@ export interface BookingSummary {
   createdAt: string
 }
 
+export interface CancellationInfo {
+  code: string
+  name: string
+}
+
 export interface BookingDetails {
   id: number
   item: BookingItemInfo
@@ -154,6 +159,7 @@ export interface BookingDetails {
   endDate: string
   purpose: string
   status: BookingStatus
+  cancellation: CancellationInfo | null
   decision: DecisionInfo | null
   loan: LoanInfo | null
   routing: RoutingInfo | null
@@ -245,17 +251,21 @@ export interface UserAccount {
   createdAt: string
 }
 
+export interface AssessmentCheck {
+  code: string
+  name: string
+  passed: boolean
+  observedValue: number | null
+  limitValue: number | null
+}
+
 export interface AssessmentLogEntry {
   id: number
   bookingId: number
   itemName: string
   inventoryNumber: string
   assessedAt: string
-  valueCheckPassed: boolean
-  specialisedCheckPassed: boolean
-  durationCheckPassed: boolean
-  organisationAutoApprovalEnabled: boolean
-  categoryAutoApprovalEnabled: boolean
+  checks: AssessmentCheck[]
   purposeResult: string
   outcome: string
   reasons: string[]

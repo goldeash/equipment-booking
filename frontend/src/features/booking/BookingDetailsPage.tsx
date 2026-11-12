@@ -85,6 +85,9 @@ export default function BookingDetailsPage() {
                   <Text size="sm" c="dimmed">
                     {details.item.inventoryNumber}, {details.item.categoryName}
                   </Text>
+                  {details.cancellation && (
+                    <Text size="sm">Cancellation reason: {details.cancellation.name}</Text>
+                  )}
                   {details.requesterName && (
                     <Text size="sm">Requested by {details.requesterName}</Text>
                   )}

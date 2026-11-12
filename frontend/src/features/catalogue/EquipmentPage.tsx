@@ -90,7 +90,13 @@ export default function EquipmentPage() {
                         <List.Item key={`${period.kind}-${period.startDate}`}>
                           {formatPeriod(period.startDate, period.endDate)}{' '}
                           <Text span c="dimmed" size="xs">
-                            ({period.kind === 'maintenance' ? 'maintenance' : 'booked'})
+                            (
+                            {period.kind === 'maintenance'
+                              ? 'maintenance'
+                              : period.kind === 'overdue'
+                                ? 'overdue, blocked until returned'
+                                : 'booked'}
+                            )
                           </Text>
                         </List.Item>
                       ))}

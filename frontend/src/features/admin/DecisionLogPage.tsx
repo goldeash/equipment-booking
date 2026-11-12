@@ -4,20 +4,51 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { approvalsApi } from '@/shared/api/endpoints'
-import { formatDateTime, routingReasonLabel } from '@/shared/lib/format'
+import type { AssessmentCheck } from '@/shared/api/types'
+import { formatDateTime, formatMoney, routingReasonLabel } from '@/shared/lib/format'
 import { PageHeader } from '@/shared/ui/PageHeader'
 import { QueryState } from '@/shared/ui/QueryState'
 
-const Check = ({ passed, label }: { passed: boolean; label: string }) => (
-  <Group gap={4} wrap="nowrap">
-    {passed ? (
-      <IconCheck size={14} color="var(--mantine-color-teal-6)" aria-label="passed" />
-    ) : (
-      <IconX size={14} color="var(--mantine-color-red-6)" aria-label="failed" />
-    )}
-    <Text size="xs">{label}</Text>
-  </Group>
-)
+const checkLabels: Record<string, string> = {
+  organisation_auto_approval: 'Automatic approval on for the organisation',
+  category_auto_approval: 'Automatic approval on for the category',
+  value_threshold: 'Low value',
+  not_specialised: 'Not specialised',
+  max_duration: 'Within loan limit',
+}
+
+/** Compared values of a check, for example the item value against the threshold in force at that time. */
+const checkValues = (check: AssessmentCheck): string | null => {
+  if (check.observedValue === null || check.limitValue === null) {
+    return null
+  }
+
+  return check.code === 'value_threshold'
+    ? `${formatMoney(check.observedValue)}, threshold ${formatMoney(check.limitValue)}`
+    : `${check.observedValue} of ${check.limitValue} days`
+}
+
+const Check = ({ check }: { check: AssessmentCheck }) => {
+  const values = checkValues(check)
+  return (
+    <Group gap={4} wrap="nowrap">
+      {check.passed ? (
+        <IconCheck size={14} color="var(--mantine-color-teal-6)" aria-label="passed" />
+      ) : (
+        <IconX size={14} color="var(--mantine-color-red-6)" aria-label="failed" />
+      )}
+      <Text size="xs" title={check.name}>
+        {checkLabels[check.code] ?? check.name}
+        {values && (
+          <Text span size="xs" c="dimmed">
+            {' '}
+            ({values})
+          </Text>
+        )}
+      </Text>
+    </Group>
+  )
+}
 
 /** Log of every assessment of the approval route with all checks and the outcome (US-26). */
 export default function DecisionLogPage() {
@@ -88,16 +119,9 @@ export default function DecisionLogPage() {
                       </Table.Td>
                       <Table.Td>
                         <Stack gap={2}>
-                          <Check passed={entry.valueCheckPassed} label="Low value" />
-                          <Check passed={entry.specialisedCheckPassed} label="Not specialised" />
-                          <Check passed={entry.durationCheckPassed} label="Within loan limit" />
-                          <Check
-                            passed={
-                              entry.organisationAutoApprovalEnabled &&
-                              entry.categoryAutoApprovalEnabled
-                            }
-                            label="Automatic approval on"
-                          />
+                          {entry.checks.map((check) => (
+                            <Check key={check.code} check={check} />
+                          ))}
                         </Stack>
                       </Table.Td>
                       <Table.Td>
