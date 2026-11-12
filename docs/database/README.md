@@ -4,10 +4,10 @@ PostgreSQL 17 or later (developed on PostgreSQL 18), accessed with Entity Framew
 
 | Document | Content |
 |---|---|
-| [data-dictionary.md](data-dictionary.md) | Tables, columns, types, keys, constraints, data quality expectations, reference values, relationships |
+| [data-dictionary.md](data-dictionary.md) | Conventions, data quality expectations, normalisation and design decisions, reference values, every relationship, tables with columns, types, keys and constraints |
 | [logical-schema.md](logical-schema.md) | Colour coded block diagram and entity relationship diagram |
-| [integrity-and-transactions.md](integrity-and-transactions.md) | Constraints, triggers, functions, views, indexes and transaction handling |
-| [roles-and-access.md](roles-and-access.md) | Database roles and privileges |
+| [integrity-and-transactions.md](integrity-and-transactions.md) | Constraints, business rules enforced by the database, error codes, triggers, functions, views, indexes and transaction handling |
+| [roles-and-access.md](roles-and-access.md) | Database roles and the privilege matrix |
 | [versioning.md](versioning.md) | Migrations, DDL script and how to apply them |
 | [test-data.md](test-data.md) | Reference data, demo data and test data |
 
@@ -18,7 +18,7 @@ PostgreSQL 17 or later (developed on PostgreSQL 18), accessed with Entity Framew
 | Entity configurations with column comments | `backend/src/EquipmentBooking.Infrastructure/Persistence/Configurations` |
 | Complete DDL script | `database/ddl/equipment_booking.sql` |
 | Login roles script | `database/scripts/create_login_roles.sql` |
-| Data dictionary generator | `database/scripts/generate_data_dictionary.sql` |
+| Data dictionary and privilege matrix generators | `database/scripts/generate_data_dictionary.sql`, `database/scripts/generate_privileges.sql` |
 | Demo data generator | `backend/tools/EquipmentBooking.DbSeeder` |
 
 ## Create a database from scratch

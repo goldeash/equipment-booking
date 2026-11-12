@@ -8,6 +8,7 @@ The structure is created only by Entity Framework Core migrations stored in Git 
 | 2 | `BookingRules` | Exclusion constraint against overlapping bookings, triggers, functions, views, full text and trigram indexes |
 | 3 | `DatabaseRoles` | Group roles `app_read`, `app_write`, `app_admin` and their privileges |
 | 4 | `BookingExpiry` | Notification types for requests that expired without a decision and bookings that were not collected |
+| 5 | `IntegrityRules` | Reference tables for every enumeration, allowed status transitions, cancellation reasons, one row per policy check with the compared values, settings history; triggers for status transitions, booking consistency, overdue blocking, maintenance overlaps from both sides and the roles of actors; `RESTRICT` on audit data; least privilege grants. Existing data are converted and validated in the same migration |
 
 ## Rules
 
@@ -22,7 +23,8 @@ dotnet tool restore
 dotnet ef migrations script --idempotent --project src/EquipmentBooking.Infrastructure --startup-project src/EquipmentBooking.Infrastructure -o ../database/ddl/equipment_booking.sql
 ```
 
-- The data dictionary tables are regenerated from the catalog with `database/scripts/generate_data_dictionary.sql`.
+- The generated sections of the data dictionary and the privilege matrix are regenerated from the catalog with `database/scripts/generate_data_dictionary.sql` and `database/scripts/generate_privileges.sql`.
+- A down migration restores the previous structure and converts the data back as far as the previous structure can hold them.
 
 ## Apply the migrations
 

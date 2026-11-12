@@ -1,6 +1,69 @@
--- Prints the table part of docs/database/data-dictionary.md from the database catalog and the
--- COMMENT ON descriptions written by the migrations. Run with:
---   psql "<connection>" -X -A -t -f database/scripts/generate_data_dictionary.sql > dictionary-tables.md
+-- Prints the generated part of docs/database/data-dictionary.md (reference values, relationships and
+-- tables) from the database catalog and the COMMENT ON descriptions written by the migrations. Run with:
+--   psql "<connection>" -X -A -t -f database/scripts/generate_data_dictionary.sql > dictionary-generated.md
+
+-- Reference values: every table whose primary key is a readable code, and the allowed status changes.
+SELECT E'## Reference values\n\nReference rows are inserted by the migrations and are read only for the application role.\n\n'
+           || E'| Table | Codes |\n|---|---|\n'
+           || string_agg('| ' || t.table_name || ' | ' || t.codes || ' |', E'\n' ORDER BY t.table_name)
+           || E'\n| booking_status_transitions | '
+           || (SELECT string_agg(from_status_code || ' to ' || to_status_code, ', ' ORDER BY from_status_code, to_status_code)
+               FROM app.booking_status_transitions)
+           || E' |\n'
+FROM (
+    SELECT c.relname AS table_name,
+           (xpath('/row/codes/text()',
+                  query_to_xml(format('SELECT string_agg(code, '', '' ORDER BY code) AS codes FROM app.%I', c.relname), false, true, '')))[1]::text AS codes
+    FROM pg_constraint pk
+             JOIN pg_class c ON c.oid = pk.conrelid
+             JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = pk.conkey[1]
+    WHERE pk.connamespace = 'app'::regnamespace
+      AND pk.contype = 'p'
+      AND array_length(pk.conkey, 1) = 1
+      AND a.attname = 'code'
+) t;
+
+-- Relationships: every foreign key with its cardinality, whether it is required and its delete rule.
+SELECT E'## Relationships\n\nEvery foreign key of the schema. One-to-one means that the referencing columns are unique; '
+           || E'optional means that they may be null. Restrict prevents deleting a referenced row; cascade deletes the '
+           || E'referencing rows with it; set null keeps them without the reference.\n\n'
+           || E'| Table | Columns | References | Cardinality | On delete |\n|---|---|---|---|---|\n'
+           || string_agg('| ' || f.child || ' | ' || f.columns || ' | ' || f.parent || ' | ' || f.cardinality || ' | ' || f.on_delete || ' |',
+                         E'\n' ORDER BY f.child, f.columns)
+           || E'\n'
+FROM (
+    SELECT child.relname AS child,
+           (SELECT string_agg(a.attname, ', ' ORDER BY array_position(con.conkey, a.attnum))
+            FROM pg_attribute a WHERE a.attrelid = con.conrelid AND a.attnum = ANY (con.conkey)) AS columns,
+           parent.relname || ' (' || (SELECT string_agg(a.attname, ', ' ORDER BY array_position(con.confkey, a.attnum))
+                                      FROM pg_attribute a WHERE a.attrelid = con.confrelid AND a.attnum = ANY (con.confkey)) || ')' AS parent,
+           CASE
+               WHEN EXISTS (SELECT 1 FROM pg_index i
+                            WHERE i.indrelid = con.conrelid AND i.indisunique AND i.indpred IS NULL
+                              AND i.indnatts = array_length(con.conkey, 1) AND i.indkey::int2[] @> con.conkey)
+                   THEN 'one-to-one'
+               ELSE 'many-to-one'
+           END
+               || CASE
+                      WHEN (SELECT bool_and(a.attnotnull) FROM pg_attribute a WHERE a.attrelid = con.conrelid AND a.attnum = ANY (con.conkey))
+                          THEN ', required'
+                      ELSE ', optional'
+                  END AS cardinality,
+           CASE con.confdeltype
+               WHEN 'r' THEN 'restrict'
+               WHEN 'c' THEN 'cascade'
+               WHEN 'n' THEN 'set null'
+               WHEN 'd' THEN 'set default'
+               ELSE 'no action'
+           END AS on_delete
+    FROM pg_constraint con
+             JOIN pg_class child ON child.oid = con.conrelid
+             JOIN pg_class parent ON parent.oid = con.confrelid
+    WHERE con.connamespace = 'app'::regnamespace AND con.contype = 'f'
+) f;
+
+-- Tables: columns, types, keys, defaults, descriptions and rules.
+SELECT E'## Tables\n';
 
 WITH columns AS (
     SELECT c.table_name,

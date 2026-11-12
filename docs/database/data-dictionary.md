@@ -1,18 +1,19 @@
 # Data dictionary
 
-Database: PostgreSQL 17 or later, schema `app`, naming in snake_case. The column tables below are generated from the database catalog and the `COMMENT ON` descriptions written by the migrations (`database/scripts/generate_data_dictionary.sql`), so they always match the deployed structure.
+Database: PostgreSQL 17 or later, schema `app`, naming in snake_case. The sections Reference values, Relationships and Tables are generated from the database catalog and the `COMMENT ON` descriptions written by the migrations (`database/scripts/generate_data_dictionary.sql`), so they always match the deployed structure. Database roles and privileges are described in [roles-and-access.md](roles-and-access.md), constraints, triggers and transactions in [integrity-and-transactions.md](integrity-and-transactions.md).
 
 ## Conventions
 
 | Item | Rule |
 |---|---|
-| Primary keys | `bigint GENERATED ALWAYS AS IDENTITY` named `id`; reference tables use a readable text `code`; one-to-one tables (`loans`) reuse the parent key |
-| Foreign keys | `<entity>_id` or `<reference>_code`, every foreign key has a B-tree index |
+| Primary keys | `bigint GENERATED ALWAYS AS IDENTITY` named `id`; reference tables use a readable text `code`; one-to-one tables (`loans`) reuse the parent key; link and result tables (`equipment_item_features`, `approval_checks`, `booking_status_transitions`) use a composite key |
+| Foreign keys | `<entity>_id` or `<reference>_code`; every foreign key has a B-tree index |
+| Enumerations | Every status, outcome, result and type is a foreign key to a reference table with a readable code and an English display name |
 | Money | `numeric(12,2)` in EUR |
 | Time | `timestamptz` stored in UTC; calendar days of bookings and maintenance as `date` (inclusive ranges) |
 | Text | `varchar(n)` with explicit limits; e-mail addresses as `citext` (unique without regard to case) |
-| Audit | `created_at` and `updated_at`; `updated_at` is set by the trigger `fn_set_updated_at` |
-| Status values | foreign keys to reference tables or `CHECK` lists, never free text |
+| Audit | `created_at` and `updated_at`; `updated_at` is set by the trigger `fn_set_updated_at`; status, condition and settings changes are kept in history tables written by triggers |
+| Deletion | Business data are never deleted: items are retired, users are deactivated, personal data of loans are anonymised. Foreign keys to bookings, items and users use `RESTRICT` |
 
 ## Data quality expectations
 
@@ -20,90 +21,165 @@ Database: PostgreSQL 17 or later, schema `app`, naming in snake_case. The column
 |---|---|---|
 | Users | Unique work e-mail with a valid format; every user has exactly one role and one department | `ux_users_email`, `ck_users_email_format`, foreign keys |
 | Passwords | Only salted PBKDF2-HMAC-SHA512 hashes, never plain text; empty until set | Application (ASP.NET Core Identity hasher) |
-| Items | Unique inventory number; value not negative; retired items have a retirement time | `ux_equipment_items_inventory_number`, `ck_equipment_items_value`, `ck_equipment_items_retired` |
+| Items | Unique inventory number; value not negative; retired exactly when a retirement time is set | `ux_equipment_items_inventory_number`, `ck_equipment_items_value`, column `retired_at` |
 | Categories | Maximum loan duration of at least one day and non-empty usage guidelines | `ck_categories_max_loan_days`, `NOT NULL` |
-| Bookings | End date not before start date; purpose of 3 to 1000 characters; no two blocking bookings of an item overlap | `ck_bookings_dates`, `ck_bookings_purpose_length`, `ex_bookings_no_overlap` |
-| Maintenance | Out of service periods never overlap blocking bookings | Trigger `fn_check_booking_maintenance` (SQLSTATE `EB001`) |
-| Decisions | A decline always has a comment; the AI assistant never declines and is never a person; one current decision per booking | `ck_booking_decisions_*`, `ux_booking_decisions_current` |
-| Loans | A return is complete (time, administrator, condition); a damaged return has a comment | `ck_loans_return_complete`, `ck_loans_damage_comment` |
-| Anonymisation | An anonymised booking has no requester and has a random reference | `ck_bookings_anonymised`, `ck_bookings_anonymous_ref` |
-| Settings | Exactly one row; threshold above zero; retention at least 30 days | `ck_organisation_settings_*` |
-| History | Status and condition history are append only for the application | Triggers and revoked `UPDATE`/`DELETE` privileges |
-
-## Reference values
-
-| Table | Codes |
-|---|---|
-| roles | employee, manager, administrator |
-| item_statuses | available, retired (out_of_service is derived from active maintenance) |
-| item_conditions | new, good, fair, damaged |
-| booking_statuses | requested, approved, declined, cancelled, issued, returned, overdue |
-| decision_sources | manager, ai_assistant |
-| routing_reasons | high_value, specialised, duration_exceeded, org_auto_approval_off, category_auto_approval_off, purpose_not_confirmed, assistant_unavailable |
-| maintenance_types | inspection, repair, calibration, cleaning |
-| notification_types | request_approved, request_declined, return_reminder, loan_overdue, booking_cancelled_by_maintenance, request_expired, booking_not_collected |
-
-Reference rows are inserted by the initial migration and are read only for the application role.
-
-## Relationships
-
-| Relationship | Type | Description |
-|---|---|---|
-| departments to users | one-to-many | Every user belongs to one department |
-| roles to users | one-to-many | Every user has one role |
-| categories to equipment_items | one-to-many | Every item belongs to one category |
-| locations to equipment_items | one-to-many | Every item is kept at one location |
-| equipment_items to features | many-to-many | Through `equipment_item_features` |
-| equipment_items to bookings | one-to-many | An item has many bookings over time |
-| users to bookings | one-to-many | A requester has many bookings; null after anonymisation |
-| bookings to booking_decisions | one-to-many | A date change supersedes the current decision |
-| bookings to loans | one-to-one | A booking becomes a loan when the item is issued |
-| bookings to approval_assessments | one-to-many | Every run of the approval route is logged |
-| approval_assessments to routing_reasons | many-to-many | Through `approval_assessment_reasons` |
-| equipment_items to maintenance_records | one-to-many | Maintenance history of an item |
-| users to notifications | one-to-many | In-app notifications |
-| refresh_tokens to refresh_tokens | self reference | Rotation chain of refresh tokens |
+| Bookings | End date not before start date; purpose of 3 to 1000 characters; no two blocking bookings of an item overlap; an item with an overdue loan cannot be booked | `ck_bookings_dates`, `ck_bookings_purpose_length`, `ex_bookings_no_overlap`, `fn_check_item_overdue` |
+| Booking status | Only allowed transitions; the status matches the loan and the current decision; a cancelled booking has exactly one cancellation reason | `booking_status_transitions` with `fn_check_booking_transition`, `fn_check_booking_consistency`, `ck_bookings_cancellation_reason` |
+| Maintenance | Out of service periods never overlap blocking bookings | `fn_check_booking_maintenance`, `fn_check_maintenance_bookings` (SQLSTATE `EB001`) |
+| Decisions | A decline always has a comment; the assistant never declines and is never a person; one current decision per booking; a manager decides only requests of the own department and never an own request | `ck_booking_decisions_*`, `ux_booking_decisions_current`, `fn_check_decision_maker` |
+| Assessments | One result for every policy check with the compared values; the outcome follows from the checks and the purpose result | Composite key of `approval_checks`, `ck_approval_checks_values`, `fn_check_assessment_consistency` |
+| Loans | A return is complete (time, administrator, condition); a damaged return has a comment; issue and return only by administrators | `ck_loans_return_complete`, `ck_loans_damage_comment`, `fn_check_loan_actors` |
+| Anonymisation | Only returned loans are anonymised; an anonymised booking has no requester and has a random reference | `ck_bookings_anonymised_returned`, `ck_bookings_anonymised`, `ck_bookings_anonymous_ref` |
+| Settings | Exactly one row; threshold above zero; retention at least 30 days; changed only by administrators; every version kept | `ck_organisation_settings_*`, `fn_check_settings_actor`, `organisation_settings_history` |
+| History | Status, condition and settings history and check results are append only for the application | Triggers and revoked `UPDATE` and `DELETE` privileges ([roles-and-access.md](roles-and-access.md)) |
 
 ## Normalisation
 
-The schema is in third normal form: every non-key column depends on the key, the whole key and nothing else. Deliberate exceptions are documented:
+The schema is in third normal form: every non-key column depends on the key, the whole key and nothing else. Each fact is stored once; derived facts are computed by views and functions. The following columns may look redundant but store separate facts, each for a stated reason:
 
-- `equipment_items.is_specialised` and `categories.is_specialised` are not duplicates: the item flag overrides a category that is not specialised.
-- `loans.due_at` is derived from the end date and the organisation return time but is frozen at issue time, so later changes of the return time do not move existing due dates.
-- Availability, the effective item status and the return history of a requester are not stored; they are computed by the functions and views listed in [integrity-and-transactions.md](integrity-and-transactions.md).
+| Columns | Why it is not a duplicate |
+|---|---|
+| `equipment_items.is_specialised` and `categories.is_specialised` | The item flag overrides a category that is not specialised; the effective value is computed by the approval check |
+| `equipment_items.condition_code` and `equipment_condition_changes` | The column is the current condition, needed by every catalogue query; the table is the history of changes written by a trigger from that column, never edited separately |
+| `bookings.status_code` and `booking_status_history` | The column is the current status that the exclusion constraint and all queries use; the history is written by a trigger from that column. The consistency of the status with the loan and the decision is checked by the database |
+| `bookings.status_code = 'overdue'` | Overdue is stored and not only computed from the due time, because it is an event: at that moment the employee and the administrators are notified, the history records the time, and KPI-2 (overdue loans flagged within one hour) is measured on it. The job runs five minutes after the organisation return time, and `v_overdue_loans` computes overdue loans from the due time, so reports are correct even before the job has run |
+| `loans.due_at` | Derived from the end date and the organisation return time, but frozen at issue time, so a later change of the return time does not move existing due dates |
+| `approval_checks.observed_value` and `limit_value` | Copies of the item value, the loan length and the limits taken when the request was assessed. They record the facts the decision was based on; the current item value or threshold may differ later. The history of the settings themselves is in `organisation_settings_history` |
+| `bookings.cancellation_reason_code` | Set only for cancelled bookings (checked by `ck_bookings_cancellation_reason`); it records why, which the status alone cannot tell |
+
+Not stored at all: availability, the effective item status (retired from `retired_at`, out of service from active maintenance), the routing reasons of an assessment (`v_assessment_routing_reasons`) and the return history of a requester (`v_requester_return_history`).
+
+## Design decisions
+
+| Topic | Decision and reason |
+|---|---|
+| Department manager | A department manager is a user with the role `manager` in that department; there is no separate column for the manager of a department. A department may have several managers so that a deputy can decide during an absence; every manager of the department sees its routed requests. A manager never decides an own request, which only other managers of the department may decide. Requests that nobody can decide are not rerouted: like every request not decided by its start date, they are cancelled by the expiry job with the reason `request_expired`, and the requester is notified |
+| Status transitions in the database | The allowed transitions are data in `booking_status_transitions`, not code, and the database enforces them for every client. The domain model uses the same list for clear error messages; an integration test keeps both in step |
+| Cancellation reasons instead of more statuses | The booking statuses stay those of the specification; the reason of a cancellation (by the requester, maintenance, no decision in time, not collected) is a separate reference value |
+
+## Reference values
+
+Reference rows are inserted by the migrations and are read only for the application role.
+
+| Table | Codes |
+|---|---|
+| approval_check_types | category_auto_approval, max_duration, not_specialised, organisation_auto_approval, value_threshold |
+| assessment_outcomes | approved, pending, routed |
+| booking_statuses | approved, cancelled, declined, issued, overdue, requested, returned |
+| cancellation_reasons | by_requester, maintenance, not_collected, request_expired |
+| decision_outcomes | approved, declined |
+| decision_sources | ai_assistant, manager |
+| email_statuses | failed, not_required, pending, sent |
+| item_conditions | damaged, fair, good, new |
+| maintenance_types | calibration, cleaning, inspection, repair |
+| notification_types | booking_cancelled_by_maintenance, booking_not_collected, loan_overdue, request_approved, request_declined, request_expired, return_reminder |
+| purpose_results | match, no_match, not_run, pending, unavailable |
+| roles | administrator, employee, manager |
+| routing_reasons | assistant_unavailable, category_auto_approval_off, duration_exceeded, high_value, org_auto_approval_off, purpose_not_confirmed, specialised |
+| booking_status_transitions | approved to cancelled, approved to issued, approved to requested, issued to overdue, issued to returned, overdue to returned, requested to approved, requested to cancelled, requested to declined |
+
+## Relationships
+
+Every foreign key of the schema. One-to-one means that the referencing columns are unique; optional means that they may be null. Restrict prevents deleting a referenced row; cascade deletes the referencing rows with it; set null keeps them without the reference.
+
+| Table | Columns | References | Cardinality | On delete |
+|---|---|---|---|---|
+| approval_assessments | booking_id | bookings (id) | many-to-one, required | restrict |
+| approval_assessments | outcome | assessment_outcomes (code) | many-to-one, required | restrict |
+| approval_assessments | purpose_result | purpose_results (code) | many-to-one, required | restrict |
+| approval_check_types | routing_reason_code | routing_reasons (code) | one-to-one, required | restrict |
+| approval_checks | assessment_id | approval_assessments (id) | many-to-one, required | cascade |
+| approval_checks | check_type_code | approval_check_types (code) | many-to-one, required | restrict |
+| booking_decisions | booking_id | bookings (id) | many-to-one, required | restrict |
+| booking_decisions | decided_by_user_id | users (id) | many-to-one, optional | restrict |
+| booking_decisions | decision_source_code | decision_sources (code) | many-to-one, required | restrict |
+| booking_decisions | outcome | decision_outcomes (code) | many-to-one, required | restrict |
+| booking_status_history | booking_id | bookings (id) | many-to-one, required | restrict |
+| booking_status_history | changed_by_user_id | users (id) | many-to-one, optional | set null |
+| booking_status_history | from_status_code | booking_statuses (code) | many-to-one, optional | restrict |
+| booking_status_history | to_status_code | booking_statuses (code) | many-to-one, required | restrict |
+| booking_status_transitions | from_status_code | booking_statuses (code) | many-to-one, required | restrict |
+| booking_status_transitions | to_status_code | booking_statuses (code) | many-to-one, required | restrict |
+| bookings | cancellation_reason_code | cancellation_reasons (code) | many-to-one, optional | restrict |
+| bookings | equipment_item_id | equipment_items (id) | many-to-one, required | restrict |
+| bookings | requester_id | users (id) | many-to-one, optional | restrict |
+| bookings | status_code | booking_statuses (code) | many-to-one, required | restrict |
+| equipment_condition_changes | changed_by_user_id | users (id) | many-to-one, optional | set null |
+| equipment_condition_changes | equipment_item_id | equipment_items (id) | many-to-one, required | restrict |
+| equipment_condition_changes | from_condition_code | item_conditions (code) | many-to-one, optional | restrict |
+| equipment_condition_changes | to_condition_code | item_conditions (code) | many-to-one, required | restrict |
+| equipment_item_features | equipment_item_id | equipment_items (id) | many-to-one, required | cascade |
+| equipment_item_features | feature_id | features (id) | many-to-one, required | cascade |
+| equipment_items | category_id | categories (id) | many-to-one, required | restrict |
+| equipment_items | condition_code | item_conditions (code) | many-to-one, required | restrict |
+| equipment_items | location_id | locations (id) | many-to-one, required | restrict |
+| loans | booking_id | bookings (id) | one-to-one, required | restrict |
+| loans | issued_by_user_id | users (id) | many-to-one, required | restrict |
+| loans | received_by_user_id | users (id) | many-to-one, optional | restrict |
+| loans | return_condition_code | item_conditions (code) | many-to-one, optional | restrict |
+| maintenance_records | equipment_item_id | equipment_items (id) | many-to-one, required | restrict |
+| maintenance_records | maintenance_type_code | maintenance_types (code) | many-to-one, required | restrict |
+| maintenance_records | recorded_by_user_id | users (id) | many-to-one, required | restrict |
+| notifications | booking_id | bookings (id) | many-to-one, optional | cascade |
+| notifications | email_status | email_statuses (code) | many-to-one, required | restrict |
+| notifications | notification_type_code | notification_types (code) | many-to-one, required | restrict |
+| notifications | user_id | users (id) | many-to-one, required | cascade |
+| organisation_settings | updated_by_user_id | users (id) | many-to-one, optional | set null |
+| organisation_settings_history | changed_by_user_id | users (id) | many-to-one, optional | set null |
+| refresh_tokens | replaced_by_token_id | refresh_tokens (id) | many-to-one, optional | set null |
+| refresh_tokens | user_id | users (id) | many-to-one, required | cascade |
+| users | department_id | departments (id) | many-to-one, required | restrict |
+| users | role_code | roles (code) | many-to-one, required | restrict |
 
 ## Tables
 
-### approval_assessment_reasons
-
-Many-to-many link between assessments and every reason why the request was routed.
-
-| Column | Type | Null | Keys | Default | Description |
-|---|---|---|---|---|---|
-| assessment_id | bigint | NOT NULL | PK, FK approval_assessments.id |  | Assessment. |
-| routing_reason_code | varchar(40) | NOT NULL | PK, FK routing_reasons.code |  | Reason for routing. |
-
 ### approval_assessments
 
-Decision log of the approval route: result of every policy check, the purpose check and the outcome.
+Decision log of the approval route: the purpose check and the outcome; the results of the policy checks are in approval_checks.
 
 | Column | Type | Null | Keys | Default | Description |
 |---|---|---|---|---|---|
 | id | bigint | NOT NULL | PK | identity | Surrogate key. |
 | booking_id | bigint | NOT NULL | FK bookings.id |  | Assessed booking. |
 | assessed_at | timestamptz | NOT NULL |  |  | Time of the assessment. |
-| value_check_passed | boolean | NOT NULL |  |  | The item value is below the low value threshold. |
-| specialised_check_passed | boolean | NOT NULL |  |  | Neither the item nor its category is specialised. |
-| duration_check_passed | boolean | NOT NULL |  |  | The loan does not exceed the maximum duration of the category. |
-| organisation_auto_approval_enabled | boolean | NOT NULL |  |  | Automatic approval was switched on for the organisation. |
-| category_auto_approval_enabled | boolean | NOT NULL |  |  | Automatic approval was switched on for the category. |
-| purpose_result | varchar(20) | NOT NULL |  |  | Result of the purpose check by the language model. |
-| outcome | varchar(20) | NOT NULL |  |  | pending, approved or routed to the manager. |
+| purpose_result | varchar(40) | NOT NULL | FK purpose_results.code |  | Result of the purpose check by the language model. |
+| outcome | varchar(40) | NOT NULL | FK assessment_outcomes.code |  | Pending, approved automatically or routed to the manager. |
 | summary | varchar(1000) | NULL |  |  | Short summary for the manager prepared by the assistant. |
 | model_name | varchar(100) | NULL |  |  | Language model used for the purpose check. |
 | prompt_version | varchar(20) | NULL |  |  | Version of the prompt template used. |
 
-Rules: `ck_approval_assessments_approved_needs_match`: `CHECK ((((outcome)::text <> 'approved'::text) OR ((purpose_result)::text = 'match'::text)))`<br>`ck_approval_assessments_outcome`: `CHECK (((outcome)::text = ANY ((ARRAY['pending'::character varying, 'approved'::character varying, 'routed'::character varying])::text[])))`<br>`ck_approval_assessments_purpose_result`: `CHECK (((purpose_result)::text = ANY ((ARRAY['pending'::character varying, 'match'::character varying, 'no_match'::character varying, 'unavailable'::character varying, 'not_run'::character varying])::text[])))`
+### approval_check_types
+
+Fixed policy checks of the approval route and the routing reason recorded when a check fails.
+
+| Column | Type | Null | Keys | Default | Description |
+|---|---|---|---|---|---|
+| code | varchar(40) | NOT NULL | PK |  | Stable code used by the application and constraints. |
+| routing_reason_code | varchar(40) | NOT NULL | FK routing_reasons.code, UQ |  | Routing reason when the check fails. |
+| name | varchar(100) | NOT NULL |  |  | Display name in English. |
+
+### approval_checks
+
+Result of every policy check of an assessment with the values it compared.
+
+| Column | Type | Null | Keys | Default | Description |
+|---|---|---|---|---|---|
+| assessment_id | bigint | NOT NULL | PK, FK approval_assessments.id |  | Assessment the check belongs to. |
+| check_type_code | varchar(40) | NOT NULL | PK, FK approval_check_types.code |  | Policy check. |
+| passed | boolean | NOT NULL |  |  | The check passed. |
+| observed_value | numeric(12,2) | NULL |  |  | Value of the request that was compared, for example the item value in EUR or the loan length in days; null for switches and flags. |
+| limit_value | numeric(12,2) | NULL |  |  | Limit in force at the time of the assessment, for example the low value threshold or the maximum loan days; null for switches and flags. |
+
+Rules: `ck_approval_checks_values`: `CHECK (((observed_value IS NULL) = (limit_value IS NULL)))`
+
+### assessment_outcomes
+
+Outcomes of the approval route for a request.
+
+| Column | Type | Null | Keys | Default | Description |
+|---|---|---|---|---|---|
+| code | varchar(40) | NOT NULL | PK |  | Stable code used by the application and constraints. |
+| name | varchar(100) | NOT NULL |  |  | Display name in English. |
 
 ### booking_decisions
 
@@ -115,12 +191,12 @@ Decisions on requests. A date change supersedes the current decision, so a booki
 | booking_id | bigint | NOT NULL | FK bookings.id |  | Decided booking. |
 | decision_source_code | varchar(40) | NOT NULL | FK decision_sources.code |  | Manager or AI assistant. |
 | decided_by_user_id | bigint | NULL | FK users.id |  | Manager who decided; null for the assistant. |
-| outcome | varchar(20) | NOT NULL |  |  | approved or declined; the assistant can only approve. |
+| outcome | varchar(40) | NOT NULL | FK decision_outcomes.code |  | Approved or declined; the assistant can only approve. |
 | comment | varchar(1000) | NULL |  |  | Comment of the manager; required for a decline. |
 | decided_at | timestamptz | NOT NULL |  |  | Decision time. |
 | superseded_at | timestamptz | NULL |  |  | Set when a date change sends the booking through the route again. |
 
-Rules: `ck_booking_decisions_assistant_never_declines`: `CHECK ((((decision_source_code)::text <> 'ai_assistant'::text) OR ((decided_by_user_id IS NULL) AND ((outcome)::text = 'approved'::text))))`<br>`ck_booking_decisions_decline_comment`: `CHECK ((((outcome)::text <> 'declined'::text) OR (comment IS NOT NULL)))`<br>`ck_booking_decisions_manager_identified`: `CHECK ((((decision_source_code)::text <> 'manager'::text) OR (decided_by_user_id IS NOT NULL)))`<br>`ck_booking_decisions_outcome`: `CHECK (((outcome)::text = ANY ((ARRAY['approved'::character varying, 'declined'::character varying])::text[])))`
+Rules: `ck_booking_decisions_assistant_never_declines`: `CHECK ((((decision_source_code)::text <> 'ai_assistant'::text) OR ((decided_by_user_id IS NULL) AND ((outcome)::text = 'approved'::text))))`<br>`ck_booking_decisions_decline_comment`: `CHECK ((((outcome)::text <> 'declined'::text) OR (comment IS NOT NULL)))`<br>`ck_booking_decisions_manager_identified`: `CHECK ((((decision_source_code)::text <> 'manager'::text) OR (decided_by_user_id IS NOT NULL)))`
 
 ### booking_status_history
 
@@ -135,6 +211,15 @@ Every status change of a booking, written by trigger.
 | changed_at | timestamptz | NOT NULL |  | now() | Change time. |
 | changed_by_user_id | bigint | NULL | FK users.id |  | User who made the change; null for background jobs and after anonymisation. |
 
+### booking_status_transitions
+
+Allowed status changes of a booking, enforced by the trigger fn_check_booking_transition.
+
+| Column | Type | Null | Keys | Default | Description |
+|---|---|---|---|---|---|
+| from_status_code | varchar(40) | NOT NULL | PK, FK booking_statuses.code |  | Current status. |
+| to_status_code | varchar(40) | NOT NULL | PK, FK booking_statuses.code |  | Status the booking may change to. |
+
 ### booking_statuses
 
 Statuses of the booking workflow.
@@ -146,7 +231,7 @@ Statuses of the booking workflow.
 
 ### bookings
 
-Requests for an item for a date range. A request blocks the item from creation until it is declined, cancelled or returned.
+Requests for an item for a date range. A request blocks the item from creation until it is declined, cancelled or returned; an overdue loan blocks the item until it is returned.
 
 | Column | Type | Null | Keys | Default | Description |
 |---|---|---|---|---|---|
@@ -161,8 +246,18 @@ Requests for an item for a date range. A request blocks the item from creation u
 | status_code | varchar(40) | NOT NULL | FK booking_statuses.code |  | Current status. |
 | created_at | timestamptz | NOT NULL |  | now() | Creation time. |
 | updated_at | timestamptz | NOT NULL |  | now() | Last change time, set by trigger. |
+| cancellation_reason_code | varchar(40) | NULL | FK cancellation_reasons.code |  | Why the booking was cancelled; set exactly when the status is cancelled. |
 
-Rules: `ck_bookings_anonymised`: `CHECK (((requester_id IS NULL) = (anonymised_at IS NOT NULL)))`<br>`ck_bookings_anonymous_ref`: `CHECK (((anonymised_at IS NULL) OR (anonymous_ref IS NOT NULL)))`<br>`ck_bookings_dates`: `CHECK ((end_date >= start_date))`<br>`ck_bookings_purpose_length`: `CHECK (((char_length((purpose)::text) >= 3) AND (char_length((purpose)::text) <= 1000)))`<br>`ex_bookings_no_overlap`: `EXCLUDE USING gist (equipment_item_id WITH =, daterange(start_date, end_date, '[]'::text) WITH &&) WHERE (((status_code)::text = ANY ((ARRAY['requested'::character varying, 'approved'::character varying, 'issued'::character varying, 'overdue'::character varying])::text[])))`
+Rules: `ck_bookings_anonymised`: `CHECK (((requester_id IS NULL) = (anonymised_at IS NOT NULL)))`<br>`ck_bookings_anonymised_returned`: `CHECK (((anonymised_at IS NULL) OR ((status_code)::text = 'returned'::text)))`<br>`ck_bookings_anonymous_ref`: `CHECK (((anonymised_at IS NULL) OR (anonymous_ref IS NOT NULL)))`<br>`ck_bookings_cancellation_reason`: `CHECK ((((status_code)::text = 'cancelled'::text) = (cancellation_reason_code IS NOT NULL)))`<br>`ck_bookings_dates`: `CHECK ((end_date >= start_date))`<br>`ck_bookings_purpose_length`: `CHECK (((char_length((purpose)::text) >= 3) AND (char_length((purpose)::text) <= 1000)))`<br>`ex_bookings_no_overlap`: `EXCLUDE USING gist (equipment_item_id WITH =, daterange(start_date, end_date, '[]'::text) WITH &&) WHERE (((status_code)::text = ANY ((ARRAY['requested'::character varying, 'approved'::character varying, 'issued'::character varying, 'overdue'::character varying])::text[])))`
+
+### cancellation_reasons
+
+Reasons why a booking was cancelled; every cancelled booking has one.
+
+| Column | Type | Null | Keys | Default | Description |
+|---|---|---|---|---|---|
+| code | varchar(40) | NOT NULL | PK |  | Stable code used by the application and constraints. |
+| name | varchar(100) | NOT NULL |  |  | Display name in English. |
 
 ### categories
 
@@ -179,6 +274,15 @@ Groups of items with the same loan limit, usage guidelines and approval settings
 | auto_approval_enabled | boolean | NOT NULL |  | true | Switch for automatic approval of this category. |
 
 Rules: `ck_categories_max_loan_days`: `CHECK ((max_loan_days > 0))`
+
+### decision_outcomes
+
+Outcomes of a decision on a request.
+
+| Column | Type | Null | Keys | Default | Description |
+|---|---|---|---|---|---|
+| code | varchar(40) | NOT NULL | PK |  | Stable code used by the application and constraints. |
+| name | varchar(100) | NOT NULL |  |  | Display name in English. |
 
 ### decision_sources
 
@@ -197,6 +301,15 @@ Organisational units; a manager decides on requests of the own department.
 |---|---|---|---|---|---|
 | id | bigint | NOT NULL | PK | identity | Surrogate key. |
 | name | varchar(100) | NOT NULL | UQ |  | Unique department name. |
+
+### email_statuses
+
+Delivery states of the e-mail copy of a notification.
+
+| Column | Type | Null | Keys | Default | Description |
+|---|---|---|---|---|---|
+| code | varchar(40) | NOT NULL | PK |  | Stable code used by the application and constraints. |
+| name | varchar(100) | NOT NULL |  |  | Display name in English. |
 
 ### equipment_condition_changes
 
@@ -234,13 +347,12 @@ Physical items of shared equipment.
 | location_id | bigint | NOT NULL | FK locations.id |  | Where the item is kept. |
 | value | numeric(12,2) | NOT NULL |  |  | Replacement value in EUR; compared with the low value threshold. |
 | condition_code | varchar(40) | NOT NULL | FK item_conditions.code |  | Current physical condition. |
-| status_code | varchar(40) | NOT NULL | FK item_statuses.code |  | Stored status: available or retired. |
 | is_specialised | boolean | NOT NULL |  | false | Item level override: specialised even if the category is not. |
-| retired_at | timestamptz | NULL |  |  | When the item was retired; set together with the status retired. |
+| retired_at | timestamptz | NULL |  |  | When the item was retired; null while the item is in use. The effective status is derived from this column and active maintenance. |
 | created_at | timestamptz | NOT NULL |  | now() | Creation time. |
 | updated_at | timestamptz | NOT NULL |  | now() | Last change time, set by trigger. |
 
-Rules: `ck_equipment_items_retired`: `CHECK ((((status_code)::text = 'retired'::text) = (retired_at IS NOT NULL)))`<br>`ck_equipment_items_value`: `CHECK ((value >= (0)::numeric))`
+Rules: `ck_equipment_items_value`: `CHECK ((value >= (0)::numeric))`
 
 ### features
 
@@ -259,15 +371,6 @@ Physical condition of an item, ordered from best to worst.
 |---|---|---|---|---|---|
 | code | varchar(40) | NOT NULL | PK |  | Stable code used by the application and constraints. |
 | sort_order | integer | NOT NULL |  |  | Display order, 1 is the best condition. |
-| name | varchar(100) | NOT NULL |  |  | Display name in English. |
-
-### item_statuses
-
-Stored statuses of equipment items. Out of service is derived from active maintenance records.
-
-| Column | Type | Null | Keys | Default | Description |
-|---|---|---|---|---|---|
-| code | varchar(40) | NOT NULL | PK |  | Stable code used by the application and constraints. |
 | name | varchar(100) | NOT NULL |  |  | Display name in English. |
 
 ### loans
@@ -346,11 +449,11 @@ In-app notifications; the e-mail columns form an outbox for a future e-mail prov
 | body | varchar(1000) | NOT NULL |  |  | Message text. |
 | created_at | timestamptz | NOT NULL |  |  | Creation time. |
 | read_at | timestamptz | NULL |  |  | When the recipient marked it as read. |
-| email_status | varchar(20) | NOT NULL |  |  | Delivery state of the e-mail copy; not_required while no provider is configured. |
+| email_status | varchar(40) | NOT NULL | FK email_statuses.code |  | Delivery state of the e-mail copy; not_required while no provider is configured. |
 | email_attempts | integer | NOT NULL |  | 0 | Number of e-mail delivery attempts. |
 | email_sent_at | timestamptz | NULL |  |  | When the e-mail copy was sent. |
 
-Rules: `ck_notifications_email_attempts`: `CHECK ((email_attempts >= 0))`<br>`ck_notifications_email_status`: `CHECK (((email_status)::text = ANY ((ARRAY['pending'::character varying, 'sent'::character varying, 'failed'::character varying, 'not_required'::character varying])::text[])))`
+Rules: `ck_notifications_email_attempts`: `CHECK ((email_attempts >= 0))`
 
 ### organisation_settings
 
@@ -368,6 +471,30 @@ Organisation wide settings, exactly one row.
 | updated_by_user_id | bigint | NULL | FK users.id |  | Administrator who changed the settings last. |
 
 Rules: `ck_organisation_settings_retention`: `CHECK ((retention_days >= 30))`<br>`ck_organisation_settings_singleton`: `CHECK ((id = 1))`<br>`ck_organisation_settings_threshold`: `CHECK ((low_value_threshold > (0)::numeric))`
+
+### organisation_settings_history
+
+Every version of the organisation settings, written by trigger.
+
+| Column | Type | Null | Keys | Default | Description |
+|---|---|---|---|---|---|
+| id | bigint | NOT NULL | PK | identity | Surrogate key. |
+| changed_at | timestamptz | NOT NULL |  | now() | When this version came into force. |
+| changed_by_user_id | bigint | NULL | FK users.id |  | Administrator who made the change; null for the initial settings and after a user was removed. |
+| low_value_threshold | numeric(12,2) | NOT NULL |  |  | Low value threshold in EUR. |
+| auto_approval_enabled | boolean | NOT NULL |  |  | Organisation wide switch for automatic approval. |
+| retention_days | integer | NOT NULL |  |  | Retention period of personal data of loans in days. |
+| time_zone | varchar(64) | NOT NULL |  |  | IANA time zone of the organisation. |
+| return_time | time | NOT NULL |  |  | Local return time on the end date. |
+
+### purpose_results
+
+Results of the purpose check by the language model.
+
+| Column | Type | Null | Keys | Default | Description |
+|---|---|---|---|---|---|
+| code | varchar(40) | NOT NULL | PK |  | Stable code used by the application and constraints. |
+| name | varchar(100) | NOT NULL |  |  | Display name in English. |
 
 ### refresh_tokens
 
