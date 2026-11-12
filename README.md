@@ -7,11 +7,11 @@ Bachelor diploma project, European Humanities University, by Denis Ivanets.
 ## Features
 
 - Catalogue search by keyword, category, location, features and availability on dates
-- Booking requests that block the item; overlaps are rejected by the database, also for simultaneous requests
-- Approval route with fixed policy checks (value threshold, specialised items, loan duration, approval switches) and a decision log; the AI purpose check is planned, until then routine requests are routed to the manager
-- Manager queue with the reasons for routing and the requester's return history; decline only with a comment
+- Booking requests that block the item; overlaps are rejected by the database, also for simultaneous requests, and an overdue loan blocks the item until it is returned
+- Approval route with fixed policy checks (value threshold, specialised items, loan duration, approval switches) and a decision log that keeps the compared values of every check; the AI purpose check is planned, until then routine requests are routed to the manager
+- Manager queue with the reasons for routing and the requester's return history; decline only with a comment; a manager never decides an own request
 - Issue and return with condition, automatic overdue detection, return reminders and in-app notifications
-- Automatic cancellation of requests not decided by the start date and of bookings not collected by the end date
+- Automatic cancellation of requests not decided by the start date and of bookings not collected by the end date, with the reason of every cancellation recorded
 - Maintenance records that take items out of service and cancel affected bookings after confirmation
 - Users, roles (employee, department manager, administrator), departments and organisation settings
 - Privacy notice, role based access and anonymisation of personal data after the retention period
@@ -21,7 +21,7 @@ Bachelor diploma project, European Humanities University, by Denis Ivanets.
 | Part | Technology |
 |---|---|
 | Backend | ASP.NET Core on .NET 10, layered architecture (Domain, Application, Infrastructure, Api), Entity Framework Core 10, FluentValidation, Serilog, JWT bearer authentication |
-| Database | PostgreSQL 18 (Neon), migrations, exclusion constraint, triggers, views, database roles |
+| Database | PostgreSQL 18 (Neon), migrations, reference tables, exclusion constraint, triggers enforcing the business rules, views, database roles with least privilege |
 | Frontend | React 19, TypeScript, Vite, Mantine, TanStack Query, Zustand, react-hook-form, zod |
 | API documentation | OpenAPI 3.1 generated at build (`docs/api/openapi.json`), interactive reference at `/docs` |
 | Tests | xUnit v3, NSubstitute, Shouldly, coverlet; Vitest, Testing Library, MSW |
@@ -68,7 +68,7 @@ Create the login roles of the application:
 psql -d equipment_booking -v api_password=<eb_api password> -v readonly_password=<eb_readonly password> -f database/scripts/create_login_roles.sql
 ```
 
-Load the demo data (60 users, 140 items, about 3,600 bookings; details in [docs/database/test-data.md](docs/database/test-data.md)), still with `ConnectionStrings__Migrations` set:
+Load the demo data (60 users, 140 items, about 3,500 bookings; details in [docs/database/test-data.md](docs/database/test-data.md)), still with `ConnectionStrings__Migrations` set:
 
 ```bash
 export EB_DEMO_PASSWORD="<password of the demo accounts, at least 12 characters>"
