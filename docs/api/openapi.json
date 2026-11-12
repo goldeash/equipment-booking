@@ -2725,6 +2725,46 @@
           }
         }
       },
+      "AssessmentCheckInfo": {
+        "required": [
+          "code",
+          "name",
+          "passed",
+          "observedValue",
+          "limitValue"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "observedValue": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "limitValue": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        },
+        "description": "Result of one policy check with the compared values, for example the item value and the threshold."
+      },
       "AssessmentLogEntry": {
         "required": [
           "id",
@@ -2732,11 +2772,7 @@
           "itemName",
           "inventoryNumber",
           "assessedAt",
-          "valueCheckPassed",
-          "specialisedCheckPassed",
-          "durationCheckPassed",
-          "organisationAutoApprovalEnabled",
-          "categoryAutoApprovalEnabled",
+          "checks",
           "purposeResult",
           "outcome",
           "reasons"
@@ -2769,20 +2805,11 @@
             "type": "string",
             "format": "date-time"
           },
-          "valueCheckPassed": {
-            "type": "boolean"
-          },
-          "specialisedCheckPassed": {
-            "type": "boolean"
-          },
-          "durationCheckPassed": {
-            "type": "boolean"
-          },
-          "organisationAutoApprovalEnabled": {
-            "type": "boolean"
-          },
-          "categoryAutoApprovalEnabled": {
-            "type": "boolean"
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssessmentCheckInfo"
+            }
           },
           "purposeResult": {
             "type": "string"
@@ -2821,7 +2848,7 @@
             "type": "string"
           }
         },
-        "description": "Period in which the item is not free; never contains the names of other employees (US-04)."
+        "description": "Period in which the item is not free; never contains the names of other employees (US-04).\r\nAn overdue loan and a maintenance period without a known end have no end date: the item stays\r\nblocked until it is returned or the maintenance ends."
       },
       "BookingDetails": {
         "required": [
@@ -2833,6 +2860,7 @@
           "endDate",
           "purpose",
           "status",
+          "cancellation",
           "decision",
           "loan",
           "routing",
@@ -2881,6 +2909,16 @@
           },
           "status": {
             "type": "string"
+          },
+          "cancellation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CancellationInfo"
+              }
+            ]
           },
           "decision": {
             "oneOf": [
@@ -3001,6 +3039,22 @@
             "format": "date-time"
           }
         }
+      },
+      "CancellationInfo": {
+        "required": [
+          "code",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "description": "Why a cancelled booking was cancelled, for example by the requester or because no decision was made in time."
       },
       "CategoryResponse": {
         "required": [
